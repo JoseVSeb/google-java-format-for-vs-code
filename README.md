@@ -33,9 +33,7 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 ## Todo
 
-Load google java format jar executable and format java files.
-
-Load using absolute path or relative path.
+Load using relative path.
 
 Load using web url to jar file.
 
