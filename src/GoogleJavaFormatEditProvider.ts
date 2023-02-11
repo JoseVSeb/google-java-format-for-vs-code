@@ -3,12 +3,13 @@ import {
     DocumentFormattingEditProvider,
     DocumentRangeFormattingEditProvider,
     FormattingOptions,
+    LogOutputChannel,
     Range,
     TextDocument,
     TextEdit,
     window,
 } from "vscode";
-import { ILogService } from "./LogService";
+import { IGoogleJavaFormatter } from "./IGoogleJavaFormatter";
 
 export default class GoogleJavaFormatEditProvider
     implements
@@ -16,9 +17,20 @@ export default class GoogleJavaFormatEditProvider
         DocumentFormattingEditProvider
 {
     constructor(
-        private formatText: (text: string) => Promise<string>,
-        private log: ILogService,
+        private formatter: IGoogleJavaFormatter,
+        private log: LogOutputChannel,
     ) {}
+
+    private async formatText(text: string): Promise<string> {
+        const startTime = new Date().getTime();
+
+        const result = await this.formatter.format(text);
+
+        const duration = new Date().getTime() - startTime;
+        this.log.info(`Formatting completed in ${duration}ms.`);
+
+        return result;
+    }
 
     private errorHandler(error: unknown): TextEdit[] {
         const message =
