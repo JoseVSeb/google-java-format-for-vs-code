@@ -4,6 +4,14 @@ import { IGoogleJavaFormatter } from "./IGoogleJavaFormatter";
 export default class GoogleJavaFormatterSync implements IGoogleJavaFormatter {
     constructor(private executable: string) {}
 
+    dispose() {
+        return;
+    }
+
+    init() {
+        return;
+    }
+
     public format(text: string): Promise<string> {
         return new Promise<string>((resolve, reject) => {
             try {

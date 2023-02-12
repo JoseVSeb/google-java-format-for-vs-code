@@ -1,27 +1,45 @@
 import { ExtensionContext, window } from "vscode";
+import getExtensionCacheFolder from "./getExtensionCacheFolder";
+import getExtensionConfiguration from "./getExtensionConfiguration";
+import getJarLocalPathFromConfig from "./getJarLocalPathFromConfig";
 import GoogleJavaFormatEditProvider from "./GoogleJavaFormatEditProvider";
 import GoogleJavaFormatEditService from "./GoogleJavaFormatEditService";
+import GoogleJavaFormatterBackgroundService from "./GoogleJavaFormatterBackgroundService";
 import GoogleJavaFormatterSync from "./GoogleJavaFormatterSync";
-import { getJavaConfiguration } from "./utils";
+import { IGoogleJavaFormatter } from "./IGoogleJavaFormatter";
 
-export function activate(context: ExtensionContext) {
+export async function activate(context: ExtensionContext) {
     const log = window.createOutputChannel("Google Java Format for VS Code", {
         log: true,
     });
     context.subscriptions.push(log);
 
-    const executable = getJavaConfiguration().get<string>(
-        "format.settings.google.executable",
-    );
+    const config = getExtensionConfiguration();
+    const cacheDir = getExtensionCacheFolder(context);
 
-    if (!executable) {
-        const message = "Google Java Format executable jar path not provided.";
+    if (!config) {
+        const message =
+            "Google Java Format for VS Code extension configuration not found.";
         log.error(message);
         window.showErrorMessage(message);
         return;
     }
 
-    const formatter = new GoogleJavaFormatterSync(executable);
+    const jarLocalPath = await getJarLocalPathFromConfig({
+        cacheDir,
+        log,
+        config,
+    }).then((uri) => uri.fsPath);
+
+    const { port } = config;
+
+    const formatter: IGoogleJavaFormatter =
+        port >= 0
+            ? new GoogleJavaFormatterBackgroundService(jarLocalPath, port, log)
+            : new GoogleJavaFormatterSync(jarLocalPath);
+
+    formatter.init();
+    context.subscriptions.push(formatter);
 
     const editProvider = new GoogleJavaFormatEditProvider(formatter, log);
 
