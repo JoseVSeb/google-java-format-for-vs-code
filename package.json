@@ -3,7 +3,8 @@
     "displayName": "Google Java Format for VS Code",
     "description": "Visual Studio Code extension to format Java files using google-java-format program to comply with Google Java Style.",
     "publisher": "josevseb",
-    "version": "0.0.1",
+    "repository": "https://github.com/JoseVSeb/google-java-format-for-vs-code",
+    "version": "0.1.0",
     "engines": {
         "vscode": "^1.75.0"
     },
@@ -24,7 +25,7 @@
                     },
                     "java.format.settings.google.version": {
                         "type": "string",
-                        "markdownDescription": "Specifies version to be used of [Google Java Format jar executable](https://github.com/google/google-java-format/releases).",
+                        "markdownDescription": "Specifies version to be used of [Google Java Format jar executable](https://github.com/google/google-java-format/releases). Default: `1.15.0`. Overridden by `java.format.settings.google.executable`.",
                         "default": null,
                         "scope": "window"
                     },
