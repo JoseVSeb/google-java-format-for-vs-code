@@ -4,7 +4,6 @@ import getExtensionConfiguration from "./getExtensionConfiguration";
 import getJarLocalPathFromConfig from "./getJarLocalPathFromConfig";
 import GoogleJavaFormatEditProvider from "./GoogleJavaFormatEditProvider";
 import GoogleJavaFormatEditService from "./GoogleJavaFormatEditService";
-import GoogleJavaFormatterBackgroundService from "./GoogleJavaFormatterBackgroundService";
 import GoogleJavaFormatterSync from "./GoogleJavaFormatterSync";
 import { IGoogleJavaFormatter } from "./IGoogleJavaFormatter";
 
@@ -31,25 +30,19 @@ export async function activate(context: ExtensionContext) {
         config,
     }).then((uri) => uri.fsPath);
 
-    const { port } = config;
+    const { extra } = config;
 
-    const formatter: IGoogleJavaFormatter =
-        port >= 0
-            ? new GoogleJavaFormatterBackgroundService(jarLocalPath, port, log)
-            : new GoogleJavaFormatterSync(jarLocalPath);
-
-    formatter.init();
-    context.subscriptions.push(formatter);
+    const formatter: IGoogleJavaFormatter = new GoogleJavaFormatterSync(
+        jarLocalPath,
+        extra,
+    );
+    context.subscriptions.push(formatter.init());
 
     const editProvider = new GoogleJavaFormatEditProvider(formatter, log);
 
     const editService = new GoogleJavaFormatEditService(editProvider, log);
-
-    editService.registerGlobal();
-    context.subscriptions.push(editService);
+    context.subscriptions.push(editService.registerGlobal());
 }
 
-// This method is called when your extension is deactivated
-// TODO: Implement deactivation of google java format background service.
 // eslint-disable-next-line @typescript-eslint/no-empty-function
 export function deactivate() {}

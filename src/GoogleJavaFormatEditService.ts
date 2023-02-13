@@ -18,12 +18,14 @@ export default class GoogleJavaFormatEditService implements Disposable {
         private log: LogOutputChannel,
     ) {}
 
-    public registerGlobal() {
+    public registerGlobal(): Disposable {
         this.registerDocumentFormatEditorProviders(this.selector);
         this.log.debug(
             "Enabling Google Java Formatter globally",
             this.selector,
         );
+
+        return this;
     }
 
     public dispose() {

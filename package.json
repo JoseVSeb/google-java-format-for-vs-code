@@ -22,15 +22,15 @@
                         "default": null,
                         "scope": "window"
                     },
-                    "java.format.settings.google.port": {
-                        "type": "number",
-                        "markdownDescription": "Port for Google Java Format service. Service starts automatically if `executable` is provided. Use `0` for random port; `-1` to disable background service.",
-                        "default": -1,
-                        "scope": "window"
-                    },
                     "java.format.settings.google.version": {
                         "type": "string",
                         "markdownDescription": "Specifies version to be used of [Google Java Format jar executable](https://github.com/google/google-java-format/releases).",
+                        "default": null,
+                        "scope": "window"
+                    },
+                    "java.format.settings.google.extra": {
+                        "type": "string",
+                        "markdownDescription": "Extra CLI arguments to pass to [Google Java Format](https://github.com/google/google-java-format).",
                         "default": null,
                         "scope": "window"
                     }
