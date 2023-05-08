@@ -11,6 +11,9 @@
     "categories": [
         "Formatters"
     ],
+    "activationEvents": [
+        "onLanguage:java"
+    ],
     "main": "./dist/extension.js",
     "contributes": {
         "configuration": [
@@ -36,14 +39,6 @@
                         "scope": "window"
                     }
                 }
-            }
-        ],
-        "languages": [
-            {
-                "id": "java",
-                "extensions": [
-                    ".java"
-                ]
             }
         ]
     },
