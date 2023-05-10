@@ -24,5 +24,9 @@ Auto-download executable jar from either url or full version string.
 
 Add extra CLI arguments to Google Java Format call using extension setting.
 
+## 0.1.1
+
+Fix extension activation in vs code v1.78.
+
 ---
 **Enjoy!**
