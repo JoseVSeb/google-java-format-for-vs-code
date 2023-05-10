@@ -28,7 +28,7 @@
                     },
                     "java.format.settings.google.version": {
                         "type": "string",
-                        "markdownDescription": "Specifies version to be used of [Google Java Format jar executable](https://github.com/google/google-java-format/releases). Default: `1.15.0`. Overridden by `java.format.settings.google.executable`.",
+                        "markdownDescription": "Specifies version to be used of [Google Java Format jar executable](https://github.com/google/google-java-format/releases). Default: `1.17.0`. Overridden by `java.format.settings.google.executable`.",
                         "default": null,
                         "scope": "window"
                     },

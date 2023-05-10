@@ -28,5 +28,9 @@ Add extra CLI arguments to Google Java Format call using extension setting.
 
 Fix extension activation in vs code v1.78.
 
+## 0.1.2
+
+Update default google java format version to 1.17.0.
+
 ---
 **Enjoy!**
