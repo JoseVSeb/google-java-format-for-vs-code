@@ -12,18 +12,27 @@ export default class GoogleJavaFormatterSync implements IGoogleJavaFormatter {
         return this;
     }
 
-    public format(text: string): Promise<string> {
+    public format(text: string, range?: [number, number]): Promise<string> {
         return new Promise<string>((resolve, reject) => {
             try {
-                const stdout: string = execSync(
-                    `java -jar "${this.executable}" ${this.extra ?? ""} -`,
-                    {
-                        encoding: "utf8",
-                        input: text,
-                        maxBuffer: Infinity,
-                        windowsHide: true,
-                    },
-                );
+                let command = `java -jar ${this.executable}`;
+
+                if (this.extra) {
+                    command += ` ${this.extra}`;
+                }
+
+                if (range) {
+                    command += ` --lines ${range[0]}:${range[1]}`;
+                }
+
+                command += " -";
+
+                const stdout: string = execSync(command, {
+                    encoding: "utf8",
+                    input: text,
+                    maxBuffer: Infinity,
+                    windowsHide: true,
+                });
                 resolve(stdout);
             } catch (e) {
                 reject(e);
