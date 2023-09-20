@@ -32,5 +32,9 @@ Fix extension activation in vs code v1.78.
 
 Update default google java format version to 1.17.0.
 
+## 0.1.3
+
+Fix issue with path of executable containing space.
+
 ---
 **Enjoy!**
