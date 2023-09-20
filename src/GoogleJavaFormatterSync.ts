@@ -16,7 +16,7 @@ export default class GoogleJavaFormatterSync implements IGoogleJavaFormatter {
         return new Promise<string>((resolve, reject) => {
             try {
                 const stdout: string = execSync(
-                    `java -jar ${this.executable} ${this.extra ?? ""} -`,
+                    `java -jar "${this.executable}" ${this.extra ?? ""} -`,
                     {
                         encoding: "utf8",
                         input: text,
