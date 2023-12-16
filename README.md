@@ -12,29 +12,5 @@ This extension contributes the following settings:
 
 Please refer [Google Java Format repository](https://github.com/google/google-java-format) for available versions and CLI arguments.
 
-## Release Notes
-
-### 0.1.0
-
-Initial release of Google Java Format for VS Code.
-
-Run Google Java Format jar to format java files.
-
-Auto-download executable jar from either url or full version string.
-
-Add extra CLI arguments to Google Java Format call using extension setting.
-
-## 0.1.1
-
-Fix extension activation in vs code v1.78.
-
-## 0.1.2
-
-Update default google java format version to 1.17.0.
-
-## 0.1.3
-
-Fix issue with path of executable containing space.
-
 ---
 **Enjoy!**
