@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.1.4](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v0.1.3...v0.1.4) (2023-12-16)
+
+
+### Bug Fixes
+
+* Range Formatting ([319698a](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/319698aa8b12c86bedbfcbf7d97588044b1086e9))
+
 ## [0.1.3] - 2023-09-20
 
 Fix issue with path of executable containing space.
