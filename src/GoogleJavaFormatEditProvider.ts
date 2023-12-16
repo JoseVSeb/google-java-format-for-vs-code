@@ -21,10 +21,13 @@ export default class GoogleJavaFormatEditProvider
         private log: LogOutputChannel,
     ) {}
 
-    private async formatText(text: string): Promise<string> {
+    private async formatText(text: string, range: Range): Promise<string> {
         const startTime = new Date().getTime();
 
-        const result = await this.formatter.format(text);
+        const result = await this.formatter.format(text, [
+            range.start.line + 1,
+            range.end.line + 1,
+        ]);
 
         const duration = new Date().getTime() - startTime;
         this.log.info(`Formatting completed in ${duration}ms.`);
@@ -49,11 +52,11 @@ export default class GoogleJavaFormatEditProvider
         options: FormattingOptions,
         token: CancellationToken,
     ): Promise<TextEdit[]> {
-        const textBeforeFormat = document.getText(range);
+        const documentRange = new Range(0, 0, document.lineCount, 0);
 
         try {
-            const textAfterFormat = await this.formatText(textBeforeFormat);
-            return [TextEdit.replace(range, textAfterFormat)];
+            const textAfterFormat = await this.formatText(document.getText(), range);
+            return [TextEdit.replace(documentRange, textAfterFormat)];
         } catch (error) {
             return this.errorHandler(error);
         }
@@ -64,16 +67,11 @@ export default class GoogleJavaFormatEditProvider
         options: FormattingOptions,
         token: CancellationToken,
     ): Promise<TextEdit[]> {
-        const textBeforeFormat = document.getText();
+        const documentRange = new Range(0, 0, document.lineCount, 0);
 
         try {
-            const textAfterFormat = await this.formatText(textBeforeFormat);
-            return [
-                TextEdit.replace(
-                    new Range(0, 0, document.lineCount, 0),
-                    textAfterFormat,
-                ),
-            ];
+            const textAfterFormat = await this.formatText(document.getText(), documentRange);
+            return [TextEdit.replace(documentRange, textAfterFormat)];
         } catch (error) {
             return this.errorHandler(error);
         }
