@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.2.0](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v0.1.4...v0.2.0) (2023-12-16)
+
+
+### Bug Fixes
+
+* **deps:** revert @types/vscode to vscode engine version ([58b46ed](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/58b46edef821f3eac2eb6168c37ecb5691964b42))
+* **deps:** revert glob version ([cfc545f](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/cfc545f3b622455615ea534704e7ae8d8b71ddde))
+
+
+### Features
+
+* **deps:** upgrade dependencies ([7df3fcd](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/7df3fcd00f37d63226bafd0317b75ddf6a862338))
+
 ## [0.1.4](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v0.1.3...v0.1.4) (2023-12-16)
 
 
