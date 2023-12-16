@@ -44,9 +44,9 @@ export default async function getJarLocalPathFromConfig({
         });
     }
 
-    log.debug(`Retrieving jar file using default version: 1.17.0`);
+    log.debug(`Retrieving jar file using default version: 1.18.1`);
     return downloadGoogleJavaFormatJarByVersion({
-        version: version || "1.17.0",
+        version: version || "1.18.1",
         cacheDir,
         log,
     });
