@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [1.0.0](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v0.2.0...v1.0.0) (2024-01-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* by default, download and use latest version of GJF
+
+### Features
+
+* by default, download and use latest version of GJF ([608c6fe](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/608c6fe2f661d7211f8e18a191813b7dd95cc9e3)), closes [#7](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/7)
+
 # [0.2.0](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v0.1.4...v0.2.0) (2023-12-16)
 
 
