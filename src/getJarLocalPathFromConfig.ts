@@ -4,6 +4,7 @@ import {
     downloadGoogleJavaFormatJarByVersion,
 } from "./downloadGoogleJavaFormatJar";
 import { GoogleJavaFormatConfiguration } from "./getExtensionConfiguration";
+import { getListOfGoogleJavaFormatVersions } from "./getListOfGoogleJavaFormatVersions";
 import { getUriFromString } from "./utils";
 
 export type GetJarLocalPathFromConfigOptions = {
@@ -35,7 +36,7 @@ export default async function getJarLocalPathFromConfig({
         });
     }
 
-    if (version) {
+    if (version && version !== "latest") {
         log.debug(`Retrieving jar file using 'version' config: ${version}`);
         return downloadGoogleJavaFormatJarByVersion({
             version,
@@ -44,9 +45,13 @@ export default async function getJarLocalPathFromConfig({
         });
     }
 
-    log.debug(`Retrieving jar file using default version: 1.18.1`);
+    log.debug(`Retrieving list of available versions`);
+    const [{ major, minor, patch }] = await getListOfGoogleJavaFormatVersions();
+    const latestVersion = `${major}.${minor}.${patch}` as const;
+
+    log.debug(`Retrieving jar file for latest version (${latestVersion})`);
     return downloadGoogleJavaFormatJarByVersion({
-        version: version || "1.18.1",
+        version: latestVersion,
         cacheDir,
         log,
     });
