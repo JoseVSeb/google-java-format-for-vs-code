@@ -22,13 +22,13 @@
                 "properties": {
                     "java.format.settings.google.executable": {
                         "type": "string",
-                        "markdownDescription": "Specifies url or file path to [Google Java Format jar executable](https://github.com/google/google-java-format/releases).",
+                        "markdownDescription": "*Not Recommended.* Specifies url or file path to [Google Java Format jar executable](https://github.com/google/google-java-format/releases). Overrides `java.format.settings.google.version`.",
                         "default": null,
                         "scope": "window"
                     },
                     "java.format.settings.google.version": {
                         "type": "string",
-                        "markdownDescription": "Specifies version to be used of [Google Java Format jar executable](https://github.com/google/google-java-format/releases). Default: `1.18.1`. Overridden by `java.format.settings.google.executable`.",
+                        "markdownDescription": "*Recommended.* Specifies version to be used of [Google Java Format jar executable](https://github.com/google/google-java-format/releases) in format `{major}.{minor}.{patch}`. Default: `latest`.",
                         "default": null,
                         "scope": "window"
                     },
