@@ -1,8 +1,13 @@
 import { execSync } from "child_process";
 import { IGoogleJavaFormatter } from "./IGoogleJavaFormatter";
+import { LogOutputChannel } from "vscode";
 
 export default class GoogleJavaFormatterSync implements IGoogleJavaFormatter {
-    constructor(private executable: string, private extra?: string) {}
+    constructor(
+        private executable: string,
+        private extra: string | undefined,
+        private log: LogOutputChannel,
+    ) {}
 
     dispose() {
         return;
@@ -26,6 +31,8 @@ export default class GoogleJavaFormatterSync implements IGoogleJavaFormatter {
                 }
 
                 command += " -";
+
+                this.log.debug(`> ${command}`);
 
                 const stdout: string = execSync(command, {
                     encoding: "utf8",

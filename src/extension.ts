@@ -35,6 +35,7 @@ export async function activate(context: ExtensionContext) {
     const formatter: IGoogleJavaFormatter = new GoogleJavaFormatterSync(
         jarLocalPath,
         extra,
+        log,
     );
     context.subscriptions.push(formatter.init());
 
