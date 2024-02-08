@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [1.0.1](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.0.0...v1.0.1) (2024-02-08)
+
+
+### Bug Fixes
+
+* add debug log for exec command ([28dcb58](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/28dcb58372013f6be4ce19d6ec4c30bb5053eda7)), closes [#13](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/13)
+* get config on every invoke of formatter ([8ece27e](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/8ece27e979fc80283ca5d0fde1d76c4d52a672a8)), closes [#12](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/12)
+
 ## [1.0.0](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v0.2.0...v1.0.0) (2024-01-16)
 
 
