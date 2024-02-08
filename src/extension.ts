@@ -1,6 +1,6 @@
 import { ExtensionContext, window } from "vscode";
 import getExtensionCacheFolder from "./getExtensionCacheFolder";
-import getExtensionConfiguration from "./getExtensionConfiguration";
+import { ExtensionConfiguration } from "./ExtensionConfiguration";
 import getJarLocalPathFromConfig from "./getJarLocalPathFromConfig";
 import GoogleJavaFormatEditProvider from "./GoogleJavaFormatEditProvider";
 import GoogleJavaFormatEditService from "./GoogleJavaFormatEditService";
@@ -13,16 +13,8 @@ export async function activate(context: ExtensionContext) {
     });
     context.subscriptions.push(log);
 
-    const config = getExtensionConfiguration();
+    const config = new ExtensionConfiguration();
     const cacheDir = getExtensionCacheFolder(context);
-
-    if (!config) {
-        const message =
-            "Google Java Format for VS Code extension configuration not found.";
-        log.error(message);
-        window.showErrorMessage(message);
-        return;
-    }
 
     const jarLocalPath = await getJarLocalPathFromConfig({
         cacheDir,
@@ -30,11 +22,10 @@ export async function activate(context: ExtensionContext) {
         config,
     }).then((uri) => uri.fsPath);
 
-    const { extra } = config;
-
     const formatter: IGoogleJavaFormatter = new GoogleJavaFormatterSync(
         jarLocalPath,
-        extra,
+        config,
+        log,
     );
     context.subscriptions.push(formatter.init());
 

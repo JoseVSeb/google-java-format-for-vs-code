@@ -1,8 +1,8 @@
 import {
-    CancellationToken,
+    // CancellationToken,
     DocumentFormattingEditProvider,
     DocumentRangeFormattingEditProvider,
-    FormattingOptions,
+    // FormattingOptions,
     LogOutputChannel,
     Range,
     TextDocument,
@@ -49,13 +49,18 @@ export default class GoogleJavaFormatEditProvider
     public async provideDocumentRangeFormattingEdits(
         document: TextDocument,
         range: Range,
-        options: FormattingOptions,
-        token: CancellationToken,
+        // TODO: implement formatting options
+        // options: FormattingOptions,
+        // TODO: cancellation token
+        // token: CancellationToken,
     ): Promise<TextEdit[]> {
         const documentRange = new Range(0, 0, document.lineCount, 0);
 
         try {
-            const textAfterFormat = await this.formatText(document.getText(), range);
+            const textAfterFormat = await this.formatText(
+                document.getText(),
+                range,
+            );
             return [TextEdit.replace(documentRange, textAfterFormat)];
         } catch (error) {
             return this.errorHandler(error);
@@ -64,13 +69,16 @@ export default class GoogleJavaFormatEditProvider
 
     public async provideDocumentFormattingEdits(
         document: TextDocument,
-        options: FormattingOptions,
-        token: CancellationToken,
+        // options: FormattingOptions,
+        // token: CancellationToken,
     ): Promise<TextEdit[]> {
         const documentRange = new Range(0, 0, document.lineCount, 0);
 
         try {
-            const textAfterFormat = await this.formatText(document.getText(), documentRange);
+            const textAfterFormat = await this.formatText(
+                document.getText(),
+                documentRange,
+            );
             return [TextEdit.replace(documentRange, textAfterFormat)];
         } catch (error) {
             return this.errorHandler(error);

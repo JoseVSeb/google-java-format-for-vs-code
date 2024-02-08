@@ -3,7 +3,7 @@ import {
     downloadGoogleJavaFormatJar,
     downloadGoogleJavaFormatJarByVersion,
 } from "./downloadGoogleJavaFormatJar";
-import { GoogleJavaFormatConfiguration } from "./getExtensionConfiguration";
+import { GoogleJavaFormatConfiguration } from "./ExtensionConfiguration";
 import { getListOfGoogleJavaFormatVersions } from "./getListOfGoogleJavaFormatVersions";
 import { getUriFromString } from "./utils";
 
