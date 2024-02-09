@@ -1,11 +1,16 @@
-import { ExtensionContext, window } from "vscode";
-import getExtensionCacheFolder from "./getExtensionCacheFolder";
+import {
+    ConfigurationChangeEvent,
+    ExtensionContext,
+    ProgressLocation,
+    window,
+    workspace,
+} from "vscode";
 import { ExtensionConfiguration } from "./ExtensionConfiguration";
-import getJarLocalPathFromConfig from "./getJarLocalPathFromConfig";
 import GoogleJavaFormatEditProvider from "./GoogleJavaFormatEditProvider";
 import GoogleJavaFormatEditService from "./GoogleJavaFormatEditService";
 import GoogleJavaFormatterSync from "./GoogleJavaFormatterSync";
-import { IGoogleJavaFormatter } from "./IGoogleJavaFormatter";
+import getExtensionCacheFolder from "./getExtensionCacheFolder";
+import getJarLocalPathFromConfig from "./getJarLocalPathFromConfig";
 
 export async function activate(context: ExtensionContext) {
     const log = window.createOutputChannel("Google Java Format for VS Code", {
@@ -16,17 +21,53 @@ export async function activate(context: ExtensionContext) {
     const config = new ExtensionConfiguration();
     const cacheDir = getExtensionCacheFolder(context);
 
-    const jarLocalPath = await getJarLocalPathFromConfig({
-        cacheDir,
-        log,
-        config,
-    }).then((uri) => uri.fsPath);
+    const configureJarFile = async () => {
+        config.jarUri = await getJarLocalPathFromConfig({
+            cacheDir,
+            log,
+            config,
+        });
+    };
+    await configureJarFile();
 
-    const formatter: IGoogleJavaFormatter = new GoogleJavaFormatterSync(
-        jarLocalPath,
-        config,
-        log,
+    const configurationChangeListener = async (
+        event: ConfigurationChangeEvent,
+    ) => {
+        if (
+            // check if configuration updated
+            !event.affectsConfiguration("java.format.settings.google")
+        ) {
+            // jar update not needed
+            return;
+        }
+
+        log.info("Configuration change detected.");
+        const action = await window.showInformationMessage(
+            "Configuration change detected. Update jar file?",
+            "Update",
+            "Ignore",
+        );
+
+        if (action !== "Update") {
+            log.debug("Change ignored.");
+            return;
+        }
+
+        log.debug("Updating jar file...");
+        window.withProgress(
+            {
+                location: ProgressLocation.Notification,
+                title: "Updating jar file...",
+                cancellable: false,
+            },
+            configureJarFile,
+        );
+    };
+    context.subscriptions.push(
+        workspace.onDidChangeConfiguration(configurationChangeListener),
     );
+
+    const formatter = new GoogleJavaFormatterSync(config, log);
     context.subscriptions.push(formatter.init());
 
     const editProvider = new GoogleJavaFormatEditProvider(formatter, log);

@@ -1,15 +1,22 @@
+import { Uri } from "vscode";
 import { getJavaConfiguration } from "./utils";
+
+export type GoogleJavaFormatVersion =
+    | `${number}.${number}.${number}`
+    | "latest";
 
 export interface GoogleJavaFormatConfiguration {
     executable?: string;
-    version?: string;
+    version?: GoogleJavaFormatVersion;
     extra?: string;
+    jarUri: Uri;
 }
 
 export class ExtensionConfiguration implements GoogleJavaFormatConfiguration {
     readonly executable?: string;
-    readonly version?: string;
+    readonly version?: GoogleJavaFormatVersion;
     readonly extra?: string;
+    jarUri: Uri = null!;
 
     constructor() {
         return new Proxy(this, this.handler);
@@ -17,6 +24,10 @@ export class ExtensionConfiguration implements GoogleJavaFormatConfiguration {
 
     private handler: ProxyHandler<ExtensionConfiguration> = {
         get(target, prop) {
+            if (prop === "jarUri") {
+                return target[prop];
+            }
+
             return getJavaConfiguration().get(
                 `format.settings.google.${String(prop)}`,
             );
