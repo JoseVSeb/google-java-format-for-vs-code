@@ -1,32 +1,32 @@
 name: Release
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+    workflow_dispatch:
+    push:
+        branches:
+            - main
 
 jobs:
-  release:
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    release:
+        permissions:
+            contents: write
+            issues: write
+            pull-requests: write
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      - name: Install Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
+            - name: Install Node.js
+              uses: actions/setup-node@v3
+              with:
+                  node-version: 20
 
-      - name: Install dependencies
-        run: npm ci
+            - name: Install dependencies
+              run: npm ci
 
-      - name: Semantic Release
-        run: npx semantic-release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+            - name: Semantic Release
+              run: npx semantic-release
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  VSCE_PAT: ${{ secrets.VSCE_PAT }}
