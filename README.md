@@ -12,5 +12,7 @@ This extension contributes the following settings:
 
 Please refer [Google Java Format repository](https://github.com/google/google-java-format) for available versions and CLI arguments.
 
+To debug this extenion and see how exactly it invokes the formatter, use _Developer: Set Log Level..._ to enable _Debug_ for this extension, and then open the _Output_ tab and select this extension.
+
 ---
 **Enjoy!**
