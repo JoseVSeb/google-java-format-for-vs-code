@@ -20,7 +20,7 @@ export default class GoogleJavaFormatterSync implements IGoogleJavaFormatter {
     public format(text: string, range?: [number, number]): Promise<string> {
         return new Promise<string>((resolve, reject) => {
             try {
-                let command = `java -jar ${this.config.jarUri.fsPath}`;
+                let command = `java -jar "${this.config.jarUri.fsPath}"`;
 
                 if (this.config.extra) {
                     command += ` ${this.config.extra}`;
