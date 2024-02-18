@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [1.1.1](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.1.0...v1.1.1) (2024-02-18)
+
+
+### Bug Fixes
+
+* run chmod +x for linux and mac native executables ([680002a](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/680002acaa930836ae45a716acc3d67a723b2a39)), closes [#20](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/20) [#21](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/21)
+
 ## [1.1.0](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.0.3...v1.1.0) (2024-02-18)
 
 

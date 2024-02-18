@@ -4,7 +4,7 @@
     "description": "Visual Studio Code extension to format Java files using google-java-format program to comply with Google Java Style.",
     "publisher": "josevseb",
     "repository": "https://github.com/JoseVSeb/google-java-format-for-vs-code",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "engines": {
         "vscode": "^1.75.0"
     },
