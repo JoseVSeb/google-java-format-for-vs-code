@@ -28,8 +28,8 @@
                     },
                     "java.format.settings.google.version": {
                         "type": "string",
-                        "markdownDescription": "*Recommended.* Specifies version to be used of [Google Java Format jar executable](https://github.com/google/google-java-format/releases) in format `{major}.{minor}.{patch}`. Default: `latest`.",
-                        "default": null,
+                        "markdownDescription": "*Recommended.* Specifies version to be used of [Google Java Format executable](https://github.com/google/google-java-format/releases) in format `{major}.{minor}.{patch}`. Default: `latest`.",
+                        "default": "latest",
                         "scope": "window"
                     },
                     "java.format.settings.google.extra": {

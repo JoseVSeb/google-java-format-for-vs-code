@@ -1,11 +1,11 @@
 import { LogOutputChannel, Uri } from "vscode";
+import { GoogleJavaFormatConfiguration } from "./ExtensionConfiguration";
 import {
     downloadGoogleJavaFormatJar,
     downloadGoogleJavaFormatJarByVersion,
 } from "./downloadGoogleJavaFormatJar";
-import { GoogleJavaFormatConfiguration } from "./ExtensionConfiguration";
 import { getListOfGoogleJavaFormatVersions } from "./getListOfGoogleJavaFormatVersions";
-import { getUriFromString } from "./utils";
+import { getUriFromString } from "./getUriFromString";
 
 export type GetJarLocalPathFromConfigOptions = {
     cacheDir: Uri;

@@ -16,6 +16,10 @@
     "rules": {
         "@typescript-eslint/naming-convention": "warn",
         "@typescript-eslint/semi": "warn",
+        "@typescript-eslint/no-unused-vars": [
+            "error",
+            { "ignoreRestSiblings": true }
+        ],
         "curly": "warn",
         "eqeqeq": "warn",
         "no-throw-literal": "warn",
@@ -24,4 +28,3 @@
     },
     "ignorePatterns": ["out", "dist", "**/*.d.ts"]
 }
-

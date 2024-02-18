@@ -1,5 +1,6 @@
-import { Uri } from "vscode";
-import { getJavaConfiguration } from "./utils";
+import { ConfigurationChangeEvent, ExtensionContext, workspace } from "vscode";
+
+const SECTION = `java.format.settings.google`;
 
 export type GoogleJavaFormatVersion =
     | `${number}.${number}.${number}`
@@ -9,28 +10,42 @@ export interface GoogleJavaFormatConfiguration {
     executable?: string;
     version?: GoogleJavaFormatVersion;
     extra?: string;
-    jarUri: Uri;
 }
 
 export class ExtensionConfiguration implements GoogleJavaFormatConfiguration {
-    readonly executable?: string;
-    readonly version?: GoogleJavaFormatVersion;
-    readonly extra?: string;
-    jarUri: Uri = null!;
+    executable?: string;
+    version?: GoogleJavaFormatVersion;
+    extra?: string;
+    readonly subscriptions: ((
+        config: GoogleJavaFormatConfiguration,
+    ) => void)[] = [];
 
-    constructor() {
-        return new Proxy(this, this.handler);
+    constructor(private context: ExtensionContext) {
+        this.load();
     }
 
-    private handler: ProxyHandler<ExtensionConfiguration> = {
-        get(target, prop) {
-            if (prop === "jarUri") {
-                return target[prop];
-            }
+    subscribe = () => {
+        this.context.subscriptions.push(
+            workspace.onDidChangeConfiguration(
+                this.configurationChangeListener,
+            ),
+        );
+    };
 
-            return getJavaConfiguration().get(
-                `format.settings.google.${String(prop)}`,
-            );
-        },
+    private load = () => {
+        const { subscriptions, ...config } =
+            workspace.getConfiguration(SECTION);
+        Object.assign(this, config);
+    };
+
+    private configurationChangeListener = async (
+        event: ConfigurationChangeEvent,
+    ) => {
+        if (!event.affectsConfiguration(SECTION)) {
+            return;
+        }
+
+        this.load();
+        this.subscriptions.forEach((fn) => fn(this));
     };
 }
