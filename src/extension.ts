@@ -16,6 +16,8 @@ export async function activate(context: ExtensionContext) {
     config.subscribe();
 
     const cache = await Cache.getInstance(context, log);
+    cache.subscribe();
+
     const executable = await Executable.getInstance(
         context,
         config,

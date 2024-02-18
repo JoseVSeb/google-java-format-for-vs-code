@@ -1,11 +1,18 @@
 import { createHash } from "node:crypto";
 import path = require("node:path");
-import { ExtensionContext, LogOutputChannel, Uri, workspace } from "vscode";
+import {
+    ExtensionContext,
+    LogOutputChannel,
+    Uri,
+    commands,
+    workspace,
+} from "vscode";
 
 export class Cache {
     private uri: Uri;
+
     private constructor(
-        context: ExtensionContext,
+        private context: ExtensionContext,
         private log: LogOutputChannel,
         cacheFolder: string,
     ) {
@@ -19,9 +26,27 @@ export class Cache {
     ) {
         const cache = new Cache(context, log, cacheFolder);
         await cache.init();
-        // TODO: clear old cache
         return cache;
     }
+
+    subscribe = () => {
+        this.context.subscriptions.push(
+            commands.registerCommand(
+                "googleJavaFormatForVSCode.clearCache",
+                this.clear,
+            ),
+        );
+    };
+
+    clear = async () => {
+        // clear cache
+        await workspace.fs.delete(this.uri, { recursive: true });
+        this.log.info("Cache cleared.");
+        // reload executable after clearing cache
+        await commands.executeCommand(
+            "googleJavaFormatForVSCode.reloadExecutable",
+        );
+    };
 
     private init = async () => {
         // Create the cache directory if it doesn't exist
@@ -37,10 +62,8 @@ export class Cache {
     get = async (url: string) => {
         const basename = path.basename(url);
 
-        const dirname = Uri.joinPath(
-            this.uri,
-            createHash("md5").update(url).digest("hex"),
-        );
+        const hash = createHash("md5").update(url).digest("hex");
+        const dirname = Uri.joinPath(this.uri, hash);
         const localPath = Uri.joinPath(dirname, basename);
 
         try {

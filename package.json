@@ -58,6 +58,16 @@
                     }
                 }
             }
+        ],
+        "commands": [
+            {
+                "command": "googleJavaFormatForVSCode.reloadExecutable",
+                "title": "Google Java Format For VS Code: Reload Executable"
+            },
+            {
+                "command": "googleJavaFormatForVSCode.clearCache",
+                "title": "Google Java Format For VS Code: Clear Cache"
+            }
         ]
     },
     "scripts": {

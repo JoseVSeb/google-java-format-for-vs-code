@@ -20,6 +20,13 @@ This extension contributes the following settings:
 
 Please refer [Google Java Format repository](https://github.com/google/google-java-format) for available versions and CLI arguments.
 
+## Extension Commands
+
+This extension contributes the following commands:
+
+* `Google Java Format For VS Code: Clear Cache`: Clear cache of [Google Java Format executable](https://github.com/google/google-java-format/releases) downloads by the extension.
+* `Google Java Format For VS Code: Reload Executable`: Reload the [Google Java Format executable](https://github.com/google/google-java-format/releases) using the current configuration.
+
 ## How to Debug
 
 To debug this extension and see how exactly it invokes the formatter, use *Developer: Set Log Level...* to enable *Debug* for this extension, and then open the *Output* tab and select this extension.
