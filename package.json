@@ -28,8 +28,26 @@
                     },
                     "java.format.settings.google.version": {
                         "type": "string",
-                        "markdownDescription": "*Recommended.* Specifies version to be used of [Google Java Format jar executable](https://github.com/google/google-java-format/releases) in format `{major}.{minor}.{patch}`. Default: `latest`.",
-                        "default": null,
+                        "markdownDescription": "*Recommended.* Specifies version to be used of [Google Java Format executable](https://github.com/google/google-java-format/releases) in format `{major}.{minor}.{patch}`. Default: `latest`.",
+                        "default": "latest",
+                        "scope": "window"
+                    },
+                    "java.format.settings.google.mode": {
+                        "type": "string",
+                        "markdownDescription": "Specifies the runtime mode of [Google Java Format](https://github.com/google/google-java-format/releases). Used with `java.format.settings.google.version`",
+                        "default": "native-binary",
+                        "enum": [
+                            "jar-file",
+                            "native-binary"
+                        ],
+                        "enumItemLabels": [
+                            "Jar File",
+                            "Native Binary"
+                        ],
+                        "enumDescriptions": [
+                            "Use Java runtime to execute jar file of Google Java Format.",
+                            "Use Native Binary of Google Java Format, if available, otherwise, revert to Jar File."
+                        ],
                         "scope": "window"
                     },
                     "java.format.settings.google.extra": {
@@ -39,6 +57,16 @@
                         "scope": "window"
                     }
                 }
+            }
+        ],
+        "commands": [
+            {
+                "command": "googleJavaFormatForVSCode.reloadExecutable",
+                "title": "Google Java Format For VS Code: Reload Executable"
+            },
+            {
+                "command": "googleJavaFormatForVSCode.clearCache",
+                "title": "Google Java Format For VS Code: Clear Cache"
             }
         ]
     },

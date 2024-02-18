@@ -1,49 +1,34 @@
-import { execSync } from "child_process";
-import { IGoogleJavaFormatter } from "./IGoogleJavaFormatter";
 import { LogOutputChannel } from "vscode";
-import { GoogleJavaFormatConfiguration } from "./ExtensionConfiguration";
+import { Executable } from "./Executable";
+import { ExtensionConfiguration } from "./ExtensionConfiguration";
+import { IGoogleJavaFormatter } from "./IGoogleJavaFormatter";
 
 export default class GoogleJavaFormatterSync implements IGoogleJavaFormatter {
     constructor(
-        private config: GoogleJavaFormatConfiguration,
+        private executable: Executable,
+        private config: ExtensionConfiguration,
         private log: LogOutputChannel,
     ) {}
 
-    dispose() {
-        return;
-    }
+    public format = async (
+        text: string,
+        range?: [number, number],
+        signal?: AbortSignal,
+    ): Promise<string> => {
+        const args = [];
 
-    init() {
-        return this;
-    }
+        if (this.config.extra) {
+            args.push(this.config.extra);
+        }
 
-    public format(text: string, range?: [number, number]): Promise<string> {
-        return new Promise<string>((resolve, reject) => {
-            try {
-                let command = `java -jar "${this.config.jarUri.fsPath}"`;
+        if (range) {
+            args.push(`--lines ${range[0]}:${range[1]}`);
+        }
 
-                if (this.config.extra) {
-                    command += ` ${this.config.extra}`;
-                }
-
-                if (range) {
-                    command += ` --lines ${range[0]}:${range[1]}`;
-                }
-
-                command += " -";
-
-                this.log.debug(`> ${command}`);
-
-                const stdout: string = execSync(command, {
-                    encoding: "utf8",
-                    input: text,
-                    maxBuffer: Infinity,
-                    windowsHide: true,
-                });
-                resolve(stdout);
-            } catch (e) {
-                reject(e);
-            }
+        return this.executable.run({
+            args,
+            stdin: text,
+            signal,
         });
-    }
+    };
 }

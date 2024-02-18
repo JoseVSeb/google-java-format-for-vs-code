@@ -1,16 +1,10 @@
-import {
-    ConfigurationChangeEvent,
-    ExtensionContext,
-    ProgressLocation,
-    window,
-    workspace,
-} from "vscode";
+import { ExtensionContext, window } from "vscode";
+import { Cache } from "./Cache";
+import { Executable } from "./Executable";
 import { ExtensionConfiguration } from "./ExtensionConfiguration";
 import GoogleJavaFormatEditProvider from "./GoogleJavaFormatEditProvider";
 import GoogleJavaFormatEditService from "./GoogleJavaFormatEditService";
 import GoogleJavaFormatterSync from "./GoogleJavaFormatterSync";
-import getExtensionCacheFolder from "./getExtensionCacheFolder";
-import getJarLocalPathFromConfig from "./getJarLocalPathFromConfig";
 
 export async function activate(context: ExtensionContext) {
     const log = window.createOutputChannel("Google Java Format for VS Code", {
@@ -18,62 +12,28 @@ export async function activate(context: ExtensionContext) {
     });
     context.subscriptions.push(log);
 
-    const config = new ExtensionConfiguration();
-    const cacheDir = getExtensionCacheFolder(context);
+    const config = new ExtensionConfiguration(context);
+    config.subscribe();
 
-    const configureJarFile = async () => {
-        config.jarUri = await getJarLocalPathFromConfig({
-            cacheDir,
-            log,
-            config,
-        });
-    };
-    await configureJarFile();
+    const cache = await Cache.getInstance(context, log);
+    cache.subscribe();
 
-    const configurationChangeListener = async (
-        event: ConfigurationChangeEvent,
-    ) => {
-        if (
-            // check if configuration updated
-            !event.affectsConfiguration("java.format.settings.google")
-        ) {
-            // jar update not needed
-            return;
-        }
-
-        log.info("Configuration change detected.");
-        const action = await window.showInformationMessage(
-            "Configuration change detected. Update jar file?",
-            "Update",
-            "Ignore",
-        );
-
-        if (action !== "Update") {
-            log.debug("Change ignored.");
-            return;
-        }
-
-        log.debug("Updating jar file...");
-        window.withProgress(
-            {
-                location: ProgressLocation.Notification,
-                title: "Updating jar file...",
-                cancellable: false,
-            },
-            configureJarFile,
-        );
-    };
-    context.subscriptions.push(
-        workspace.onDidChangeConfiguration(configurationChangeListener),
+    const executable = await Executable.getInstance(
+        context,
+        config,
+        cache,
+        log,
     );
+    executable.subscribe();
 
-    const formatter = new GoogleJavaFormatterSync(config, log);
-    context.subscriptions.push(formatter.init());
-
+    const formatter = new GoogleJavaFormatterSync(executable, config, log);
     const editProvider = new GoogleJavaFormatEditProvider(formatter, log);
-
-    const editService = new GoogleJavaFormatEditService(editProvider, log);
-    context.subscriptions.push(editService.registerGlobal());
+    const editService = new GoogleJavaFormatEditService(
+        editProvider,
+        context,
+        log,
+    );
+    editService.subscribe();
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-function

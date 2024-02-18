@@ -1,13 +1,6 @@
 /** @type {import('semantic-release').GlobalConfig} */
 const config = {
-    branches: [
-        "+([0-9])?(.{+([0-9]),x}).x",
-        "main",
-        "next",
-        "next-major",
-        { name: "beta", prerelease: "beta" },
-        { name: "alpha", prerelease: "alpha" },
-    ],
+    branches: ["main"],
     plugins: [
         [
             "@semantic-release/commit-analyzer",
@@ -25,13 +18,7 @@ const config = {
             },
         ],
         ["semantic-release-vsce", { packageVsix: true }],
-        [
-            "@semantic-release/git",
-            {
-                message:
-                    "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}",
-            },
-        ],
+        "@semantic-release/git",
         ["@semantic-release/github", { assets: "*.vsix" }],
     ],
 };

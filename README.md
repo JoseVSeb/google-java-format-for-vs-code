@@ -14,10 +14,18 @@ Format your java files using Google Java Format program which follows Google Jav
 This extension contributes the following settings:
 
 * `java.format.settings.google.executable`: *Not Recommended.* Specifies url or file path to [Google Java Format jar executable](https://github.com/google/google-java-format/releases). Overrides `java.format.settings.google.version`.
-* `java.format.settings.google.version`: *Recommended.* Specifies version to be used of [Google Java Format jar executable](https://github.com/google/google-java-format/releases) in format `{major}.{minor}.{patch}`. Default: `latest`.
+* `java.format.settings.google.version`: *Recommended.* Specifies version to be used of [Google Java Format executable](https://github.com/google/google-java-format/releases) in format `{major}.{minor}.{patch}`. Default: `latest`.
+* `java.format.settings.google.mode`: Specifies the runtime mode of [Google Java Format](https://github.com/google/google-java-format/releases). Used with `java.format.settings.google.version`. Default: `native-binary`.
 * `java.format.settings.google.extra`: Extra CLI arguments to pass to [Google Java Format](https://github.com/google/google-java-format).
 
 Please refer [Google Java Format repository](https://github.com/google/google-java-format) for available versions and CLI arguments.
+
+## Extension Commands
+
+This extension contributes the following commands:
+
+* `Google Java Format For VS Code: Clear Cache`: Clear cache of [Google Java Format executable](https://github.com/google/google-java-format/releases) downloads by the extension.
+* `Google Java Format For VS Code: Reload Executable`: Reload the [Google Java Format executable](https://github.com/google/google-java-format/releases) using the current configuration.
 
 ## How to Debug
 
