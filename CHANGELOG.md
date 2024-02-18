@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [1.1.0](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.0.3...v1.1.0) (2024-02-18)
+
+
+### Features
+
+* add support for native executable ([4805f80](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/4805f80b444f7efe9ffda3f64ca3443ba84851ce)), closes [#17](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/17)
+* register command to clear cache ([230405e](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/230405e7bd7606bf3237db8cd3a2a14443495580)), closes [#8](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/8)
+
 ## [1.0.3](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.0.2...v1.0.3) (2024-02-10)
 
 
