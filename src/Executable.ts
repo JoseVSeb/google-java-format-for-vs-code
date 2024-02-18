@@ -92,8 +92,12 @@ export class Executable {
                     : await this.cache.get(uri.toString());
 
             const isJar = fsPath.endsWith(".jar");
-            const dirname = path.dirname(fsPath);
+            this.cwd = path.dirname(fsPath);
             const basename = path.basename(fsPath);
+
+            this.log.debug(`Setting current working directory: ${this.cwd}`);
+
+            await this.enableExecutionPermission(basename);
 
             if (isJar) {
                 this.runner = `java -jar ./${basename}`;
@@ -102,9 +106,26 @@ export class Executable {
             } else {
                 this.runner = `./${basename}`;
             }
-
-            this.cwd = dirname;
         };
+
+    private enableExecutionPermission = async (basename: string) => {
+        if (basename.endsWith(".jar")) {
+            return;
+        }
+
+        // chmod +x for linux and mac native executables
+        if (
+            (["linux", "darwin"] as NodeJS.Platform[]).includes(
+                process.platform,
+            )
+        ) {
+            const command = `chmod +x ${basename}`;
+
+            this.log.debug(`> ${command}`);
+
+            execSync(command, { cwd: this.cwd });
+        }
+    };
 
     private configurationChangeListener = async () => {
         this.log.info("Configuration change detected.");
