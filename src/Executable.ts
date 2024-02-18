@@ -9,7 +9,7 @@ import {
 } from "vscode";
 import { Cache } from "./Cache";
 import { ExtensionConfiguration } from "./ExtensionConfiguration";
-import getJarLocalPathFromConfig from "./getJarLocalPathFromConfig";
+import { resolveExecutableFileFromConfig } from "./resolveExecutableFileFromConfig";
 import path = require("node:path");
 
 export class Executable {
@@ -74,20 +74,27 @@ export class Executable {
         // }>,
         // token?: CancellationToken,
         {
-            // TODO: move caching logic to class Cache
-            // TODO: move versioning logic to class GoogleJavaFormatVersionManager
-            const { fsPath } = await getJarLocalPathFromConfig({
-                cacheDir: this.cache.dir,
-                log: this.log,
-                config: this.config,
-            });
+            const uri = await resolveExecutableFileFromConfig(
+                this.config,
+                this.log,
+            );
 
-            const extname = path.extname(fsPath);
-            const basename = path.basename(fsPath);
+            const { fsPath } =
+                uri.scheme === "file"
+                    ? uri
+                    : await this.cache.get(uri.toString());
+
+            const isJar = fsPath.endsWith(".jar");
             const dirname = path.dirname(fsPath);
+            const basename = path.basename(fsPath);
 
-            this.runner =
-                extname === ".jar" ? `java -jar ${basename}` : extname;
+            if (isJar) {
+                this.runner = `java -jar ./${basename}`;
+            } else if (process.platform === "win32") {
+                this.runner = basename;
+            } else {
+                this.runner = `./${basename}`;
+            }
 
             this.cwd = dirname;
         };
