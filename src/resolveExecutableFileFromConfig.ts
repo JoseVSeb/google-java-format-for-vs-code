@@ -11,7 +11,7 @@ export async function resolveExecutableFileFromConfig(
     if (executable) {
         log.debug(`Using config key 'executable': ${executable}`);
 
-        return getUriFromString(executable);
+        return getUriFromString(log, executable);
     }
 
     const shouldCheckNativeBinary = mode === "native-binary";
@@ -26,8 +26,8 @@ export async function resolveExecutableFileFromConfig(
 
     const { assets } =
         version && version !== "latest"
-            ? await getReleaseOfGoogleJavaFormatByVersion(version)
-            : await getLatestReleaseOfGoogleJavaFormat();
+            ? await getReleaseOfGoogleJavaFormatByVersion(log, version)
+            : await getLatestReleaseOfGoogleJavaFormat(log);
 
     const url =
         (shouldCheckNativeBinary && assets.get(system)) || assets.get("java")!;
