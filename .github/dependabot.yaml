@@ -3,9 +3,14 @@ updates:
     - package-ecosystem: "npm"
       directory: "/"
       schedule:
-          interval: "daily"
+          interval: "monthly"
       ignore:
           - dependency-name: "@types/vscode"
             update-types:
                 - "version-update:semver-major"
                 - "version-update:semver-minor"
+      groups:
+          production-dependencies:
+              dependency-type: "production"
+          development-dependencies:
+              dependency-type: "development"
