@@ -110,5 +110,10 @@
     },
     "dependencies": {
         "node-fetch": "^3.3.2"
+    },
+    "overrides": {
+        "@typescript-eslint/eslint-plugin": {
+            "eslint": "$eslint"
+        }
     }
 }
