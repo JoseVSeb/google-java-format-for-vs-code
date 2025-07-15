@@ -7,6 +7,7 @@ import {
     commands,
     workspace,
 } from "vscode";
+import { fetchWithSSLOptions } from "./fetchWithSSLOptions";
 
 export class Cache {
     private uri: Uri;
@@ -15,6 +16,7 @@ export class Cache {
         private context: ExtensionContext,
         private log: LogOutputChannel,
         cacheFolder: string,
+        private strictSSL: boolean = true,
     ) {
         this.uri = Uri.joinPath(context.extensionUri, cacheFolder);
     }
@@ -23,8 +25,9 @@ export class Cache {
         context: ExtensionContext,
         log: LogOutputChannel,
         cacheFolder = "cache",
+        strictSSL: boolean = true,
     ) {
-        const cache = new Cache(context, log, cacheFolder);
+        const cache = new Cache(context, log, cacheFolder, strictSSL);
         await cache.init();
         return cache;
     }
@@ -36,6 +39,10 @@ export class Cache {
                 this.clear,
             ),
         );
+    };
+
+    updateStrictSSL = (strictSSL: boolean) => {
+        this.strictSSL = strictSSL;
     };
 
     clear = async () => {
@@ -88,7 +95,11 @@ export class Cache {
             // Download the file and write it to the cache directory
             this.log.info(`Downloading file from ${url}`);
 
-            const response = await fetch(url);
+            const response = await fetchWithSSLOptions(
+                url,
+                this.strictSSL,
+                this.log,
+            );
             if (response.ok) {
                 const buffer = await response.arrayBuffer();
                 await workspace.fs.writeFile(localPath, new Uint8Array(buffer));

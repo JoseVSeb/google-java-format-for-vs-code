@@ -55,6 +55,12 @@
                         "markdownDescription": "Extra CLI arguments to pass to [Google Java Format](https://github.com/google/google-java-format).",
                         "default": null,
                         "scope": "window"
+                    },
+                    "java.format.settings.google.strictSSL": {
+                        "type": "boolean",
+                        "markdownDescription": "Whether to verify SSL certificates when downloading Google Java Format. Set to `false` if you're behind a corporate proxy with custom certificates.",
+                        "default": true,
+                        "scope": "window"
                     }
                 }
             }
