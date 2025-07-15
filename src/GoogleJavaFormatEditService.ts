@@ -1,4 +1,5 @@
 import {
+    DocumentFormattingEditProvider,
     DocumentRangeFormattingEditProvider,
     DocumentSelector,
     ExtensionContext,
@@ -10,7 +11,8 @@ export default class GoogleJavaFormatEditService {
     private readonly selector: DocumentSelector = { language: "java" };
 
     constructor(
-        private editProvider: DocumentRangeFormattingEditProvider,
+        private editProvider: DocumentRangeFormattingEditProvider &
+            DocumentFormattingEditProvider,
         private context: ExtensionContext,
         private log: LogOutputChannel,
     ) {}
@@ -18,6 +20,12 @@ export default class GoogleJavaFormatEditService {
     public subscribe = () => {
         this.context.subscriptions.push(
             languages.registerDocumentRangeFormattingEditProvider(
+                this.selector,
+                this.editProvider,
+            ),
+        );
+        this.context.subscriptions.push(
+            languages.registerDocumentFormattingEditProvider(
                 this.selector,
                 this.editProvider,
             ),
