@@ -15,8 +15,18 @@ export async function activate(context: ExtensionContext) {
     const config = new ExtensionConfiguration(context);
     config.subscribe();
 
-    const cache = await Cache.getInstance(context, log);
+    const cache = await Cache.getInstance(
+        context,
+        log,
+        "cache",
+        config.strictSSL ?? true,
+    );
     cache.subscribe();
+
+    // Subscribe to configuration changes for cache SSL settings
+    config.subscriptions.push((newConfig) => {
+        cache.updateStrictSSL(newConfig.strictSSL ?? true);
+    });
 
     const executable = await Executable.getInstance(
         context,

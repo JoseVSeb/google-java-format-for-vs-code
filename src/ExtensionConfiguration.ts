@@ -13,6 +13,7 @@ export interface GoogleJavaFormatConfiguration {
     version?: GoogleJavaFormatVersion;
     mode?: GoogleJavaFormatMode;
     extra?: string;
+    strictSSL?: boolean;
 }
 
 export class ExtensionConfiguration implements GoogleJavaFormatConfiguration {
@@ -20,6 +21,7 @@ export class ExtensionConfiguration implements GoogleJavaFormatConfiguration {
     version?: GoogleJavaFormatVersion;
     mode?: GoogleJavaFormatMode;
     extra?: string;
+    strictSSL?: boolean;
     readonly subscriptions: ((
         config: GoogleJavaFormatConfiguration,
     ) => void)[] = [];

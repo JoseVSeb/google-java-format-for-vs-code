@@ -5,7 +5,7 @@ import { getReleaseOfGoogleJavaFormatByVersion } from "./getReleaseOfGoogleJavaF
 import { getUriFromString } from "./getUriFromString";
 
 export async function resolveExecutableFileFromConfig(
-    { executable, mode, version }: ExtensionConfiguration,
+    { executable, mode, version, strictSSL }: ExtensionConfiguration,
     log: LogOutputChannel,
 ): Promise<Uri> {
     if (executable) {
@@ -24,10 +24,12 @@ export async function resolveExecutableFileFromConfig(
         log.debug(`Using latest version...`);
     }
 
+    const config = { strictSSL } as ExtensionConfiguration;
+
     const { assets } =
         version && version !== "latest"
-            ? await getReleaseOfGoogleJavaFormatByVersion(log, version)
-            : await getLatestReleaseOfGoogleJavaFormat(log);
+            ? await getReleaseOfGoogleJavaFormatByVersion(log, version, config)
+            : await getLatestReleaseOfGoogleJavaFormat(log, config);
 
     const url =
         (shouldCheckNativeBinary && assets.get(system)) || assets.get("java")!;
