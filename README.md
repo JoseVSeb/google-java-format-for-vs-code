@@ -12,9 +12,10 @@ Format your java files using Google Java Format program which follows Google Jav
 
 ## Installation
 
-This extension is available on both:
+This extension is available on:
 - [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=josevseb.google-java-format-for-vs-code) for VS Code
-- [OpenVSX Registry](https://open-vsx.org/extension/josevseb/google-java-format-for-vs-code) for VSCodium and other VS Code compatible editors
+- [OpenVSX Registry](https://open-vsx.org/extension/josevseb/google-java-format-for-vs-code) for VSCodium, Cursor, and other VS Code compatible editors
+- [GitHub Releases](https://github.com/JoseVSeb/google-java-format-for-vs-code/releases) as `.vsix` files for manual installation
 
 ## Extension Settings
 
