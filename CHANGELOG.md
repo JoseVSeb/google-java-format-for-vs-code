@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [1.2.0](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.1.2...v1.2.0) (2025-07-17)
+
+
+### Features
+
+* add OpenVSX Registry publishing support ([#60](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/60)) ([8b4d68b](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/8b4d68b024d5000d970e73b9dd651045578a2609))
+
 ## [1.1.2](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.1.1...v1.1.2) (2024-05-28)
 
 
