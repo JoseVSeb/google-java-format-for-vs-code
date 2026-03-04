@@ -84,6 +84,7 @@ export class Executable {
             const uri = await resolveExecutableFileFromConfig(
                 this.config,
                 this.log,
+                this.context,
             );
 
             const { fsPath } =

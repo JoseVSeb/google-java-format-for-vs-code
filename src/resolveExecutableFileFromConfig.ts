@@ -1,12 +1,25 @@
-import { LogOutputChannel, Uri } from "vscode";
+import { ExtensionContext, LogOutputChannel, Uri } from "vscode";
 import { ExtensionConfiguration } from "./ExtensionConfiguration";
 import { getLatestReleaseOfGoogleJavaFormat } from "./getLatestReleaseOfGoogleJavaFormat";
 import { getReleaseOfGoogleJavaFormatByVersion } from "./getReleaseOfGoogleJavaFormatByVersion";
 import { getUriFromString } from "./getUriFromString";
 
+function getUrlStateKey({
+    version,
+    mode,
+    system,
+}: {
+    version: string;
+    mode: string;
+    system: string;
+}) {
+    return `resolvedUrl:${version}:${mode}:${system}`;
+}
+
 export async function resolveExecutableFileFromConfig(
     { executable, mode, version }: ExtensionConfiguration,
     log: LogOutputChannel,
+    context?: ExtensionContext,
 ): Promise<Uri> {
     if (executable) {
         log.debug(`Using config key 'executable': ${executable}`);
@@ -24,14 +37,36 @@ export async function resolveExecutableFileFromConfig(
         log.debug(`Using latest version...`);
     }
 
-    const { assets } =
-        version && version !== "latest"
-            ? await getReleaseOfGoogleJavaFormatByVersion(log, version)
-            : await getLatestReleaseOfGoogleJavaFormat(log);
+    const stateKey = getUrlStateKey({
+        version: version ?? "latest",
+        mode: mode ?? "jar-file",
+        system,
+    });
 
-    const url =
-        (shouldCheckNativeBinary && assets.get(system)) || assets.get("java")!;
-    log.debug(`Using url: ${url}`);
+    try {
+        const { assets } =
+            version && version !== "latest"
+                ? await getReleaseOfGoogleJavaFormatByVersion(log, version)
+                : await getLatestReleaseOfGoogleJavaFormat(log);
 
-    return Uri.parse(url);
+        const url =
+            (shouldCheckNativeBinary && assets.get(system)) ||
+            assets.get("java")!;
+        log.debug(`Using url: ${url}`);
+
+        if (context) {
+            await context.globalState.update(stateKey, url);
+        }
+
+        return Uri.parse(url);
+    } catch (error) {
+        const cachedUrl = context?.globalState.get<string>(stateKey);
+        if (cachedUrl) {
+            log.warn(
+                `Network unavailable, falling back to last known url: ${cachedUrl}`,
+            );
+            return Uri.parse(cachedUrl);
+        }
+        throw error;
+    }
 }
