@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [1.2.1](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.2.0...v1.2.1) (2026-03-04)
+
+
+### Bug Fixes
+
+* fall back to cached URL when GitHub API is unavailable ([#64](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/64)) ([a17611a](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/a17611a5aa0b214697f064f180ae12f2625fc547))
+
 ## [1.2.0](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.1.2...v1.2.0) (2025-07-17)
 
 
