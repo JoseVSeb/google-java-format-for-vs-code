@@ -7,6 +7,7 @@ import {
     commands,
     workspace,
 } from "vscode";
+import { fetchWithCerts } from "./fetchWithCerts";
 
 export class Cache {
     private uri: Uri;
@@ -88,7 +89,7 @@ export class Cache {
             // Download the file and write it to the cache directory
             this.log.info(`Downloading file from ${url}`);
 
-            const response = await fetch(url);
+            const response = await fetchWithCerts(url);
             if (response.ok) {
                 const buffer = await response.arrayBuffer();
                 await workspace.fs.writeFile(localPath, new Uint8Array(buffer));

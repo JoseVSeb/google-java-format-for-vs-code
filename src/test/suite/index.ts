@@ -17,10 +17,14 @@ export async function run() {
     // Add files to the test suite
     files.forEach((f) => mocha.addFile(path.resolve(testsRoot, f)));
 
-    // Run the mocha test
-    mocha.run((failures) => {
-        if (failures > 0) {
-            throw new Error(`${failures} tests failed.`);
-        }
+    // Run the mocha test; wrap in a Promise so test-electron sees rejections.
+    await new Promise<void>((resolve, reject) => {
+        mocha.run((failures) => {
+            if (failures > 0) {
+                reject(new Error(`${failures} tests failed.`));
+            } else {
+                resolve();
+            }
+        });
     });
 }

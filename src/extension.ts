@@ -1,6 +1,6 @@
-import { ExtensionContext, window } from "vscode";
+import { ExtensionContext, commands, window } from "vscode";
 import { Cache } from "./Cache";
-import { Executable } from "./Executable";
+import { Executable, isSSLError } from "./Executable";
 import { ExtensionConfiguration } from "./ExtensionConfiguration";
 import GoogleJavaFormatEditProvider from "./GoogleJavaFormatEditProvider";
 import GoogleJavaFormatEditService from "./GoogleJavaFormatEditService";
@@ -25,6 +25,25 @@ export async function activate(context: ExtensionContext) {
         log,
     );
     executable.subscribe();
+
+    if (executable.error) {
+        const error = executable.error;
+        const detail = isSSLError(error)
+            ? "This may be caused by SSL certificate validation failure (e.g., behind a corporate proxy). "
+            : "";
+        const message = `Google Java Format: Failed to download the formatter executable. ${detail}You can manually download the JAR from https://github.com/google/google-java-format/releases and set the path in the "java.format.settings.google.executable" setting.`;
+        log.error(message, error);
+        window
+            .showErrorMessage(message, "Open Settings")
+            .then((selection) => {
+                if (selection === "Open Settings") {
+                    commands.executeCommand(
+                        "workbench.action.openSettings",
+                        "java.format.settings.google.executable",
+                    );
+                }
+            });
+    }
 
     const formatter = new GoogleJavaFormatterSync(executable, config, log);
     const editProvider = new GoogleJavaFormatEditProvider(formatter, log);

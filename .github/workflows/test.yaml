@@ -1,0 +1,29 @@
+name: Tests
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install Node.js
+              uses: actions/setup-node@v3
+              with:
+                  node-version: 20
+
+            - name: Install dependencies
+              run: npm ci
+
+            # xvfb-run is required on Linux because VS Code / Electron needs a
+            # display server.  -a auto-assigns a display number.
+            - name: Run tests (compile + test-electron)
+              run: xvfb-run -a npm run test:ci

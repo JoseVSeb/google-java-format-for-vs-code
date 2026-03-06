@@ -13,9 +13,16 @@ import { ExtensionConfiguration } from "./ExtensionConfiguration";
 import { resolveExecutableFileFromConfig } from "./resolveExecutableFileFromConfig";
 import path = require("node:path");
 
+export function isSSLError(error: Error): boolean {
+    return /certificate|ssl|tls|CERT_|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER/i.test(
+        error.message,
+    );
+}
+
 export class Executable {
     private runner: string = null!;
     private cwd: string = null!;
+    private loadError: Error | null = null;
 
     private constructor(
         private context: ExtensionContext,
@@ -31,8 +38,17 @@ export class Executable {
         log: LogOutputChannel,
     ) {
         const instance = new Executable(context, config, cache, log);
-        await instance.load();
+        try {
+            await instance.load();
+        } catch (error) {
+            // loadError is already set by load(); activation continues gracefully
+            instance.log.error("Failed to load executable:", error);
+        }
         return instance;
+    }
+
+    get error() {
+        return this.loadError;
     }
 
     run = async ({
@@ -43,6 +59,14 @@ export class Executable {
         stdin: string;
         signal?: AbortSignal;
     }) => {
+        if (this.loadError) {
+            const hint = isSSLError(this.loadError)
+                ? ` This may be caused by SSL certificate validation failure (e.g., behind a corporate proxy). Try setting "java.format.settings.google.executable" to a local path of the downloaded JAR file.`
+                : ` Try reloading the executable or setting "java.format.settings.google.executable" to a local path of the downloaded JAR file.`;
+            throw new Error(
+                `Google Java Format executable failed to load: ${this.loadError.message}.${hint}`,
+            );
+        }
         return new Promise<string>((resolve, reject) => {
             try {
                 const command = `${this.runner} ${args.join(" ")} -`;
@@ -69,7 +93,19 @@ export class Executable {
         this.context.subscriptions.push(
             commands.registerCommand(
                 "googleJavaFormatForVSCode.reloadExecutable",
-                this.load,
+                async () => {
+                    try {
+                        await this.load();
+                    } catch (error) {
+                        const message =
+                            error instanceof Error
+                                ? error.message
+                                : String(error);
+                        window.showErrorMessage(
+                            `Google Java Format: Failed to reload executable: ${message}`,
+                        );
+                    }
+                },
             ),
         );
     };
@@ -81,31 +117,41 @@ export class Executable {
         // }>,
         // token?: CancellationToken,
         {
-            const uri = await resolveExecutableFileFromConfig(
-                this.config,
-                this.log,
-                this.context,
-            );
+            try {
+                const uri = await resolveExecutableFileFromConfig(
+                    this.config,
+                    this.log,
+                    this.context,
+                );
 
-            const { fsPath } =
-                uri.scheme === "file"
-                    ? uri
-                    : await this.cache.get(uri.toString());
+                const { fsPath } =
+                    uri.scheme === "file"
+                        ? uri
+                        : await this.cache.get(uri.toString());
 
-            const isJar = fsPath.endsWith(".jar");
-            this.cwd = path.dirname(fsPath);
-            const basename = path.basename(fsPath);
+                const isJar = fsPath.endsWith(".jar");
+                this.cwd = path.dirname(fsPath);
+                const basename = path.basename(fsPath);
 
-            this.log.debug(`Setting current working directory: ${this.cwd}`);
+                this.log.debug(
+                    `Setting current working directory: ${this.cwd}`,
+                );
 
-            await this.enableExecutionPermission(basename);
+                await this.enableExecutionPermission(basename);
 
-            if (isJar) {
-                this.runner = `java -jar ./${basename}`;
-            } else if (process.platform === "win32") {
-                this.runner = basename;
-            } else {
-                this.runner = `./${basename}`;
+                if (isJar) {
+                    this.runner = `java -jar ./${basename}`;
+                } else if (process.platform === "win32") {
+                    this.runner = basename;
+                } else {
+                    this.runner = `./${basename}`;
+                }
+
+                this.loadError = null;
+            } catch (error) {
+                this.loadError =
+                    error instanceof Error ? error : new Error(String(error));
+                throw error;
             }
         };
 
@@ -148,7 +194,17 @@ export class Executable {
                 title: "Updating executable...",
                 cancellable: false,
             },
-            this.load,
+            async () => {
+                try {
+                    await this.load();
+                } catch (error) {
+                    const message =
+                        error instanceof Error ? error.message : String(error);
+                    window.showErrorMessage(
+                        `Google Java Format: Failed to update executable: ${message}`,
+                    );
+                }
+            },
         );
     };
 }

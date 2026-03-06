@@ -3,6 +3,7 @@ import {
     GoogleJavaFormatReleaseResponse,
     parseGoogleJavaFormatReleaseResponse,
 } from "./GoogleJavaFormatRelease";
+import { fetchWithCerts } from "./fetchWithCerts";
 import { logAsyncFunction } from "./logFunction";
 
 export const getLatestReleaseOfGoogleJavaFormat = logAsyncFunction(
@@ -10,7 +11,7 @@ export const getLatestReleaseOfGoogleJavaFormat = logAsyncFunction(
         const url =
             "https://api.github.com/repos/google/google-java-format/releases/latest";
         log.debug("Fetching:", url);
-        const response = await fetch(url);
+        const response = await fetchWithCerts(url);
         if (!response.ok) {
             throw new Error(
                 "Failed to get latest release of Google Java Format.",
