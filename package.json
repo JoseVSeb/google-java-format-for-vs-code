@@ -80,7 +80,8 @@
         "watch-tests": "tsc -p . -w --outDir out",
         "pretest": "npm run compile-tests && npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
-        "test": "node ./out/test/runTest.js"
+        "test": "node ./out/test/runTest.js",
+        "test:ci": "npm run compile-tests && npm run compile && node ./out/test/runTest.js"
     },
     "devDependencies": {
         "@semantic-release/changelog": "^6.0.3",

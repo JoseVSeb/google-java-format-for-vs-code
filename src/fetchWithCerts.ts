@@ -24,23 +24,22 @@ type HttpResponse = {
 };
 
 /**
- * Lazily-initialised HTTPS agent that merges:
+ * Builds an https.Agent whose trust store is:
  *   1. Node.js built-in root certificates (tls.rootCertificates)
  *   2. The GitHub-specific root CAs bundled with this extension (certs/github-ca.pem)
+ *   3. Any additional PEM-encoded CA strings passed via `additionalCaPems`
  *
  * Using node:https (instead of the global fetch API) ensures the request goes
  * through VS Code's patched https.request, which already handles system
  * certificates and proxy configuration.  Bundling the GitHub CAs provides an
  * additional safety net on systems where they might be absent from the default
  * CA store.
+ *
+ * `additionalCaPems` is intended for use in tests only: pass the PEM contents
+ * of a test CA so that a locally-spun HTTPS server can be trusted without
+ * touching the system trust store.
  */
-let _httpsAgent: https.Agent | undefined;
-
-function getHttpsAgent(): https.Agent {
-    if (_httpsAgent) {
-        return _httpsAgent;
-    }
-
+export function buildHttpsAgent(additionalCaPems: string[] = []): https.Agent {
     const cas: string[] = [...tls.rootCertificates];
 
     // Merge bundled GitHub root CA certificates.
@@ -55,7 +54,16 @@ function getHttpsAgent(): https.Agent {
         // Bundled certs file unavailable; proceed with tls.rootCertificates only
     }
 
-    _httpsAgent = new https.Agent({ ca: cas });
+    cas.push(...additionalCaPems);
+    return new https.Agent({ ca: cas });
+}
+
+let _httpsAgent: https.Agent | undefined;
+
+function getHttpsAgent(): https.Agent {
+    if (!_httpsAgent) {
+        _httpsAgent = buildHttpsAgent();
+    }
     return _httpsAgent;
 }
 
