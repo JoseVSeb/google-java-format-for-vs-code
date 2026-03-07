@@ -152,39 +152,37 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a npx vscode-test --coverage --coverage-reporter lcovonly
 
-      - name: Run e2e tests (macOS / Windows)
+      - name: Run e2e tests with coverage (macOS / Windows)
         if: runner.os != 'Linux'
-        run: npx vscode-test
+        run: npx vscode-test --coverage --coverage-reporter lcovonly
 
-      - name: Upload coverage report
-        if: runner.os == 'Linux'
+      # Upload per-platform artifacts with unique names (useful for debugging).
+      - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: coverage-${{ matrix.os }}
           path: coverage/
           if-no-files-found: warn
 
-  # -----------------------------------------------------------------------
-  # Upload coverage to Codecov (only from the Linux run)
-  # -----------------------------------------------------------------------
-  coverage:
-    name: Upload coverage to Codecov
-    needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download coverage report
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/
-
-      - name: Upload to Codecov
+      # Upload directly to Codecov from each platform.  Codecov automatically
+      # merges all uploads for the same commit SHA, so platform-specific
+      # branches (win32, linux, darwin) are reflected in the combined report.
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/lcov.info
+          flags: ${{ matrix.os }}
           fail_ci_if_error: false
+
+  # -----------------------------------------------------------------------
+  # Placeholder job so branch-protection rules that require "coverage" to
+  # pass continue to work.  Actual Codecov uploads happen in the test job.
+  # -----------------------------------------------------------------------
+  coverage:
+    name: Coverage uploaded
+    needs: test
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: echo "Coverage reports uploaded from each platform in the test job."

@@ -109,6 +109,15 @@ interface FormatScenario {
   executableEnvVar?: string;
 
   /**
+   * When true (and `executableEnvVar` is also set), the env-var value (a plain
+   * local file path) is converted to a `file://` URI before being written to
+   * the `executable` config setting.  This exercises `getUriFromString`'s
+   * remote-URL parsing branch (`isRemote ? Uri.parse(value, true) : …`).
+   * The binary used is identical to Scenario A – only the config string differs.
+   */
+  useFileUri?: boolean;
+
+  /**
    * GJF version to configure (approach 2).  Use `"latest"` or a concrete
    * semver string like `"1.25.2"`.
    */
@@ -161,10 +170,13 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       this.timeout(120_000);
 
       if (scenario.executableEnvVar) {
-        // Approach 1: explicit executable path
+        // Approach 1: explicit executable path (plain path or file:// URI)
         const execPath = process.env[scenario.executableEnvVar];
         if (!execPath) return; // tests in this suite will skip via isAvailable()
-        await cfg().update("executable", execPath, GLOBAL);
+        // When useFileUri is set, convert the plain path to a file:// URI so
+        // that getUriFromString takes the remote-URL (Uri.parse) branch.
+        const executable = scenario.useFileUri ? vscode.Uri.file(execPath).toString() : execPath;
+        await cfg().update("executable", executable, GLOBAL);
         // version/mode are ignored when executable is set, but clear them for
         // clarity so the VS Code settings inspector looks clean.
         await cfg().update("version", undefined, GLOBAL);
@@ -524,12 +536,15 @@ suite("Google Java Format for VS Code – e2e", () => {
   //   E  version=1.25.2  + jar-file                     (approach 2, specific, Java 21+)
   //   F  version=latest  + native-binary + extra=--aosp (approach 2, AOSP style)
   //   G  version=latest  + jar-file      + extra=--aosp (approach 2, AOSP + Java 21+)
+  //   H  executable=<file:// URI>                       (approach 1, URI form)
   //
   // Scenario A is guarded by the GJF_EXECUTABLE env var set by the CI step
   // "Download GJF native binary (for executable scenario)".  Scenarios B–G
   // are always attempted; C, E and G are skipped gracefully when Java is absent.
   // Scenarios F and G reuse the binaries cached by B and C respectively, so
   // they incur no additional download latency.
+  // Scenario H uses the same binary as A but referenced via a file:// URI,
+  // exercising the getUriFromString remote-URL (Uri.parse) code path.
   // -------------------------------------------------------------------------
 
   addFormatSuite("Scenario A – executable: local file path", {
@@ -575,6 +590,11 @@ suite("Google Java Format for VS Code – e2e", () => {
     extra: "--aosp",
     formattedFixture: "AospFormattedSample.java",
     indentCheck: "    private",
+  });
+
+  addFormatSuite("Scenario H – executable: file:// URI (getUriFromString Uri.parse path)", {
+    executableEnvVar: "GJF_EXECUTABLE",
+    useFileUri: true,
   });
 
   // -------------------------------------------------------------------------
@@ -636,6 +656,75 @@ suite("Google Java Format for VS Code – e2e", () => {
         null,
         "extra should revert to null after being cleared",
       );
+    });
+
+    test("non-existent version number triggers a load failure", async function () {
+      this.timeout(30_000);
+      // Set a version tag that does not exist on GitHub (v0.0.0).
+      // getReleaseByVersion() fetches the GitHub Releases API and gets a 404,
+      // throwing "Failed to get v0.0.0 of Google Java Format."
+      // resolveExecutableFileFromConfig's catch block finds no cached URL for
+      // this stateKey and re-throws, propagating through the @logAsyncMethod
+      // decorator on Executable.load() and ultimately rejecting the command.
+      await cfg().update("executable", undefined, GLOBAL);
+      await cfg().update("version", "0.0.0", GLOBAL);
+
+      let caughtError: unknown;
+      try {
+        await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
+      } catch (e) {
+        caughtError = e;
+      }
+
+      assert.ok(
+        caughtError instanceof Error,
+        "reloadExecutable should reject when the version does not exist on GitHub",
+      );
+
+      // Restore a working configuration so subsequent tests are unaffected.
+      await cfg().update("version", "latest", GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+      // Best-effort reload; the binary URL for "latest" is already cached in
+      // globalState from the earlier format scenarios, so this succeeds even
+      // without network access.
+      await vscode.commands
+        .executeCommand("googleJavaFormatForVSCode.reloadExecutable")
+        .catch(() => {});
+    });
+
+    test("https:// URL in executable that returns 404 triggers a load failure", async function () {
+      this.timeout(30_000);
+      // Set executable to a well-formed HTTPS URL that resolves but returns a
+      // 404 response.  This exercises:
+      //   • getUriFromString's isRemote=true branch (Uri.parse called)
+      //   • Cache.get()'s !response.ok error path (lines 81-84 in Cache.ts)
+      // The URL below is a GitHub API endpoint for an asset ID that does not
+      // exist; GitHub returns HTTP 404 with a JSON body.
+      await cfg().update(
+        "executable",
+        "https://api.github.com/repos/google/google-java-format/releases/assets/0",
+        GLOBAL,
+      );
+
+      let caughtError: unknown;
+      try {
+        await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
+      } catch (e) {
+        caughtError = e;
+      }
+
+      assert.ok(
+        caughtError instanceof Error,
+        "reloadExecutable should reject when the download URL returns a non-OK response",
+      );
+
+      // Restore a working configuration.
+      await cfg().update("executable", undefined, GLOBAL);
+      await cfg().update("version", "latest", GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+      await vscode.commands
+        .executeCommand("googleJavaFormatForVSCode.reloadExecutable")
+        .catch(() => {});
     });
   });
 });
