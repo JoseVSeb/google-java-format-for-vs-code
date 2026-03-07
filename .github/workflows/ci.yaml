@@ -106,6 +106,10 @@ jobs:
       # to be pre-downloaded by CI; all other format scenarios (B–E) exercise
       # the extension's own version+mode auto-download code path and need
       # nothing pre-staged.
+      #
+      # GJF native-binary asset names use an underscore before the platform
+      # component, e.g. google-java-format_linux-x86-64.  The glob patterns
+      # below match that naming convention.
       # --------------------------------------------------------------------------
       - name: Download GJF native binary (for executable scenario)
         env:
@@ -113,15 +117,16 @@ jobs:
         shell: bash
         run: |
           case "$RUNNER_OS" in
-            Linux)   PATTERN="*-linux-x86-64"          ;;
-            macOS)   PATTERN="*-darwin-arm64"           ;;
+            Linux)   PATTERN="*_linux-x86-64"          ;;
+            macOS)   PATTERN="*_darwin-arm64"           ;;
             # Note: macos-latest runners are now ARM64 (Apple Silicon).
             # There is no macOS x86-64 native binary in GJF releases, so if a
             # future runner uses x86-64, the download will return nothing and
             # GJF_EXECUTABLE will remain unset (Scenario A tests skip).
-            Windows) PATTERN="*-windows-x86-64.exe"    ;;
+            Windows) PATTERN="*_windows-x86-64.exe"    ;;
             *)       exit 0                             ;;
           esac
+          mkdir -p "${RUNNER_TEMP}/gjf-native"
           gh release download \
             --repo google/google-java-format \
             --pattern "$PATTERN" \
