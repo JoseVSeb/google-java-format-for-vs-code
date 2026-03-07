@@ -4,6 +4,7 @@ import path = require("node:path");
 
 import type { ExtensionContext, LogOutputChannel } from "vscode";
 import { commands, Uri, workspace } from "vscode";
+import { httpsGet } from "./httpsGet";
 import { logAsyncMethod } from "./logDecorator";
 
 export class Cache {
@@ -71,7 +72,7 @@ export class Cache {
       }
 
       this.log.info(`Downloading file from ${url}`);
-      const response = await fetch(url);
+      const response = await httpsGet(url);
       if (response.ok) {
         const buffer = await response.arrayBuffer();
         await workspace.fs.writeFile(localPath, new Uint8Array(buffer));
