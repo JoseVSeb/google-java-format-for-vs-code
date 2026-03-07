@@ -86,7 +86,10 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          # GJF ≥ 1.22.0 requires Java 21 (uses Java 21 compiler APIs for
+          # pattern matching; running with Java 17 causes NoClassDefFoundError
+          # on JCTree$JCAnyPattern).
+          java-version: "21"
 
       - name: Install dependencies
         run: npm ci
@@ -100,7 +103,7 @@ jobs:
       # Download the GJF all-deps jar using the authenticated gh CLI so that
       # the extension never needs to call the GitHub API during test activation
       # (avoids rate-limiting / macOS Electron fetch failures).
-      - name: Download google-java-format jar
+      - name: Download google-java-format jar (latest)
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -110,6 +113,43 @@ jobs:
             --pattern "*-all-deps.jar" \
             --dir "${RUNNER_TEMP}"
           echo "GJF_JAR=$(find "${RUNNER_TEMP}" -name "*-all-deps.jar" | head -1)" >> "${GITHUB_ENV}"
+
+      # Download a pinned older release to exercise the "specific version" code path.
+      - name: Download google-java-format jar (specific version v1.25.2)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release download v1.25.2 \
+            --repo google/google-java-format \
+            --pattern "*-all-deps.jar" \
+            --dir "${RUNNER_TEMP}/gjf-specific" || true
+          SPECIFIC=$(find "${RUNNER_TEMP}/gjf-specific" -name "*-all-deps.jar" | head -1)
+          [ -n "$SPECIFIC" ] && echo "GJF_JAR_SPECIFIC=$SPECIFIC" >> "$GITHUB_ENV" || true
+
+      # Download the native binary for the current platform to exercise the
+      # "native-binary" code path.  The binary name pattern is OS-specific.
+      - name: Download google-java-format native binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   PATTERN="*-linux-x86-64"           ;;
+            macOS)   PATTERN="*-darwin-arm64"            ;;
+            # Note: `macos-latest` in GitHub Actions is now ARM64 (Apple
+            # Silicon).  If a future runner uses x86-64 there is no macOS
+            # x86-64 native binary in GJF releases, so the download will
+            # return nothing and GJF_NATIVE will remain unset (tests skip).
+            Windows) PATTERN="*-windows-x86-64.exe"      ;;
+            *)       exit 0                              ;;
+          esac
+          gh release download \
+            --repo google/google-java-format \
+            --pattern "$PATTERN" \
+            --dir "${RUNNER_TEMP}/gjf-native" || true
+          BIN=$(find "${RUNNER_TEMP}/gjf-native" -type f | head -1)
+          [ -n "$BIN" ] && echo "GJF_NATIVE=$BIN" >> "$GITHUB_ENV" || true
 
       - name: Compile test sources
         run: npm run compile-tests

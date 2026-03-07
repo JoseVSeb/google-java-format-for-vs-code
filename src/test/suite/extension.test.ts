@@ -29,6 +29,140 @@ async function openFixture(filename: string) {
   return vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
 }
 
+/** Returns true when a Java runtime is on PATH (required for jar-file mode). */
+async function isJavaAvailable(): Promise<boolean> {
+  try {
+    const { execSync } = await import("node:child_process");
+    execSync("java -version", { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Creates a Mocha sub-suite that tests the full format pipeline for one
+ * executable configuration.
+ *
+ * @param suiteName  Mocha suite title.
+ * @param envVar     Name of the env var that holds the absolute path to the
+ *                   executable.  When the env var is not set every test in
+ *                   the suite is skipped gracefully.
+ * @param requiresJava  Set to `false` for native-binary scenarios: the binary
+ *                   is a self-contained GraalVM native image and does NOT
+ *                   need a JVM on PATH.  Defaults to `true` (jar-file mode).
+ */
+function addFormatSuite(
+  suiteName: string,
+  envVar: string,
+  /** Set to false for native-binary tests; the binary needs no JVM. */
+  requiresJava = true,
+) {
+  suite(suiteName, () => {
+    suiteSetup(async () => {
+      const execPath = process.env[envVar];
+      if (!execPath) return;
+      await vscode.workspace
+        .getConfiguration("java.format.settings.google")
+        .update("executable", execPath, vscode.ConfigurationTarget.Global);
+      // Explicitly reload so the extension picks up the new path without
+      // waiting for the user-facing "Update?" notification dialog.
+      await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
+    });
+
+    suiteTeardown(async () => {
+      // Restore to the latest jar set by the top-level suiteSetup.
+      const jar = process.env.GJF_JAR;
+      await vscode.workspace
+        .getConfiguration("java.format.settings.google")
+        .update("executable", jar || undefined, vscode.ConfigurationTarget.Global);
+      if (jar) {
+        await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
+      }
+    });
+
+    /** Returns true when this suite's prerequisite env var and runtime are available. */
+    async function isAvailable(): Promise<boolean> {
+      if (!process.env[envVar]) return false;
+      if (requiresJava && !(await isJavaAvailable())) return false;
+      return true;
+    }
+
+    const skipMsg = `  ↳ Skipping: ${envVar} not set${requiresJava ? " or Java not available" : ""}`;
+
+    test("format document applies edits to an unformatted Java file", async function () {
+      if (!(await isAvailable())) {
+        console.log(skipMsg);
+        return;
+      }
+      this.timeout(60_000);
+
+      const editor = await openFixture("UnformattedSample.java");
+      const doc = editor.document;
+      const originalText = doc.getText();
+
+      await vscode.commands.executeCommand("editor.action.formatDocument");
+      await waitUntil(() => doc.getText() !== originalText, 30_000);
+
+      const formattedText = doc.getText();
+      assert.notStrictEqual(formattedText, originalText, "Document should have been reformatted");
+      assert.ok(
+        formattedText.includes("  private"),
+        "Formatted code should use 2-space Google Java Style indentation",
+      );
+
+      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+    });
+
+    test("format range applies edits only within the selected range", async function () {
+      if (!(await isAvailable())) {
+        console.log(skipMsg);
+        return;
+      }
+      this.timeout(60_000);
+
+      const editor = await openFixture("UnformattedSample.java");
+      const doc = editor.document;
+
+      // Select lines 0-4 (position 0 of line 5 is the exclusive end) so that
+      // the selection covers the class declaration which contains unformatted
+      // code regardless of whether GJF removes unused imports.
+      const range = new vscode.Range(0, 0, 5, 0);
+      editor.selection = new vscode.Selection(range.start, range.end);
+
+      const originalText = doc.getText();
+      await vscode.commands.executeCommand("editor.action.formatSelection");
+      await waitUntil(() => doc.getText() !== originalText, 30_000);
+
+      assert.notStrictEqual(doc.getText(), originalText, "Selection should have been reformatted");
+
+      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+    });
+
+    test("already-formatted document is unchanged after formatting", async function () {
+      if (!(await isAvailable())) {
+        console.log(skipMsg);
+        return;
+      }
+      this.timeout(60_000);
+
+      const editor = await openFixture("FormattedSample.java");
+      const doc = editor.document;
+      const originalText = doc.getText();
+
+      await vscode.commands.executeCommand("editor.action.formatDocument");
+      // Give the formatter a moment to (not) apply edits
+      await new Promise((r) => setTimeout(r, 3_000));
+
+      assert.strictEqual(
+        doc.getText(),
+        originalText,
+        "Already-formatted document should be unchanged",
+      );
+    });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
@@ -64,6 +198,7 @@ suite("Google Java Format for VS Code – e2e", () => {
       .getConfiguration("java.format.settings.google")
       .update("executable", undefined, vscode.ConfigurationTarget.Global);
   });
+
   // -------------------------------------------------------------------------
   // Extension activation
   // -------------------------------------------------------------------------
@@ -184,96 +319,22 @@ suite("Google Java Format for VS Code – e2e", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Format document (requires java executable)
+  // Format document – scenario matrix
+  //
+  // Three independent sub-suites test the full format pipeline for each
+  // artifact type the extension supports.  Each is guarded by an env var
+  // pre-set by the "Download google-java-format …" CI steps so that local
+  // developer machines without those env vars skip gracefully.
   // -------------------------------------------------------------------------
 
-  suite("Format document (Java executable required)", () => {
-    /**
-     * Checks whether the google-java-format binary or Java runtime is available.
-     * If not available the formatting tests are skipped gracefully.
-     */
-    async function isFormatterAvailable(): Promise<boolean> {
-      try {
-        const { execSync } = await import("node:child_process");
-        execSync("java -version", { stdio: "pipe" });
-        return true;
-      } catch {
-        return false;
-      }
-    }
+  // Scenario A: explicit jar-file path (latest release)
+  addFormatSuite("Format document – jar-file (latest)", "GJF_JAR", true);
 
-    test("format document applies edits to an unformatted Java file", async function () {
-      if (!(await isFormatterAvailable())) {
-        console.log("  ↳ Skipping: Java runtime not available");
-        return;
-      }
-      this.timeout(60_000);
+  // Scenario B: explicit jar-file path (specific pinned version)
+  addFormatSuite("Format document – jar-file (specific version v1.25.2)", "GJF_JAR_SPECIFIC", true);
 
-      const editor = await openFixture("UnformattedSample.java");
-      const doc = editor.document;
-      const originalText = doc.getText();
-
-      // Execute VS Code's built-in format document command
-      await vscode.commands.executeCommand("editor.action.formatDocument");
-      await waitUntil(() => doc.getText() !== originalText, 30_000);
-
-      const formattedText = doc.getText();
-      assert.notStrictEqual(formattedText, originalText, "Document should have been reformatted");
-      // The formatted output should contain proper Google Java Style indentation
-      assert.ok(
-        formattedText.includes("  private"),
-        "Formatted code should use 2-space indentation",
-      );
-
-      // Revert to avoid side-effects on the fixture file
-      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
-    });
-
-    test("format range applies edits only within the selected range", async function () {
-      if (!(await isFormatterAvailable())) {
-        console.log("  ↳ Skipping: Java runtime not available");
-        return;
-      }
-      this.timeout(60_000);
-
-      const editor = await openFixture("UnformattedSample.java");
-      const doc = editor.document;
-
-      // Select just lines 0-2 (import block)
-      const range = new vscode.Range(0, 0, 2, 0);
-      editor.selection = new vscode.Selection(range.start, range.end);
-
-      const originalText = doc.getText();
-      await vscode.commands.executeCommand("editor.action.formatSelection");
-      await waitUntil(() => doc.getText() !== originalText, 30_000);
-
-      assert.notStrictEqual(doc.getText(), originalText, "Selection should have been reformatted");
-
-      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
-    });
-
-    test("already-formatted document is unchanged after formatting", async function () {
-      if (!(await isFormatterAvailable())) {
-        console.log("  ↳ Skipping: Java runtime not available");
-        return;
-      }
-      this.timeout(60_000);
-
-      const editor = await openFixture("FormattedSample.java");
-      const doc = editor.document;
-      const originalText = doc.getText();
-
-      await vscode.commands.executeCommand("editor.action.formatDocument");
-      // Give the formatter a moment to apply edits
-      await new Promise((r) => setTimeout(r, 3_000));
-
-      assert.strictEqual(
-        doc.getText(),
-        originalText,
-        "Already-formatted document should be unchanged",
-      );
-    });
-  });
+  // Scenario C: native binary (GraalVM native image, no JVM needed at runtime)
+  addFormatSuite("Format document – native binary", "GJF_NATIVE", false);
 
   // -------------------------------------------------------------------------
   // Clear cache command
