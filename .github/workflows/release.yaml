@@ -36,4 +36,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          # NOTE: VSCE_PRE_RELEASE controls the --pre-release flag passed to `vsce package`,
+          # marking the extension as a pre-release in the VS Code Marketplace when publishing
+          # from the `next` branch. This is intentionally separate from semantic-release's own
+          # `prerelease` branch option (which would produce pre-release semver tags like
+          # 1.2.0-next.1 that the VS Marketplace does not support). The version tag stays a
+          # stable semver string (e.g. 1.2.0) regardless of the branch.
           VSCE_PRE_RELEASE: ${{ github.ref_name == 'next' && 'true' || 'false' }}
