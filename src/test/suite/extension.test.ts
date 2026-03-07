@@ -523,18 +523,15 @@ suite("Google Java Format for VS Code – e2e", () => {
     requiresJava: true,
   });
 
-  addFormatSuite(
-    "Scenario F – version:latest, mode:native-binary, extra:--aosp (AOSP style)",
-    {
-      version: "latest",
-      mode: "native-binary",
-      extra: "--aosp",
-      // AOSP style uses 4-space indentation; use the AOSP-formatted fixture
-      // for the "already-formatted" test and check for 4-space indent.
-      formattedFixture: "AospFormattedSample.java",
-      indentCheck: "    private",
-    },
-  );
+  addFormatSuite("Scenario F – version:latest, mode:native-binary, extra:--aosp (AOSP style)", {
+    version: "latest",
+    mode: "native-binary",
+    extra: "--aosp",
+    // AOSP style uses 4-space indentation; use the AOSP-formatted fixture
+    // for the "already-formatted" test and check for 4-space indent.
+    formattedFixture: "AospFormattedSample.java",
+    indentCheck: "    private",
+  });
 
   addFormatSuite("Scenario G – version:latest, mode:jar-file, extra:--aosp (AOSP style)", {
     version: "latest",
