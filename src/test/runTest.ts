@@ -1,3 +1,4 @@
+import * as os from "node:os";
 import * as path from "node:path";
 import { runTests } from "@vscode/test-electron";
 
@@ -11,10 +12,21 @@ async function main() {
     // Passed to --extensionTestsPath.
     const extensionTestsPath = path.resolve(__dirname, "./suite/index");
 
-    // Download VS Code, unzip it, and run the integration tests.
-    // When VSCODE_TEST_COVERAGE=1 the test-electron runner collects V8 coverage
-    // for the extension source and writes an lcov report to ./coverage/lcov.info.
-    await runTests({ extensionDevelopmentPath, extensionTestsPath });
+    // macOS (and Linux) enforce a 103-character limit on Unix domain socket
+    // paths. The default VS Code test user-data directory is derived from the
+    // extension development path, which can easily exceed that limit on CI
+    // (e.g. /Users/runner/work/<repo>/<repo>/.vscode-test/user-data/…).
+    // We use a short fixed path under the OS temp dir to avoid this.
+    // On Windows named pipes have no such constraint, but using a short path
+    // there is still harmless.
+    const userDataDir =
+      process.platform === "win32" ? path.join(os.tmpdir(), "vsc-test-user-data") : "/tmp/vsc-u";
+
+    await runTests({
+      extensionDevelopmentPath,
+      extensionTestsPath,
+      launchArgs: ["--user-data-dir", userDataDir],
+    });
   } catch (err) {
     console.error("Failed to run tests", err);
     process.exit(1);
