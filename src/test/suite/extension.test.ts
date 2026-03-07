@@ -21,6 +21,7 @@ async function resetConfig(): Promise<void> {
   await cfg().update("executable", undefined, GLOBAL);
   await cfg().update("version", "latest", GLOBAL);
   await cfg().update("mode", "native-binary", GLOBAL);
+  await cfg().update("extra", undefined, GLOBAL);
 }
 
 /** Wait until a condition becomes truthy, polling every 100 ms. */
@@ -125,6 +126,27 @@ interface FormatScenario {
 
   /** Set to true when this scenario's artifact requires Java 21+ on PATH. */
   requiresJava?: boolean;
+
+  /**
+   * Extra CLI arguments to pass to GJF (e.g. `"--aosp"`).
+   * Maps directly to `java.format.settings.google.extra`.
+   */
+  extra?: string;
+
+  /**
+   * Name of the already-formatted fixture file used by the
+   * "already-formatted document is unchanged" test.
+   * Defaults to `"FormattedSample.java"`.
+   */
+  formattedFixture?: string;
+
+  /**
+   * Substring that must appear in the formatted output of
+   * `UnformattedSample.java`, used to verify the expected indentation style.
+   * Defaults to `"  private"` (2-space Google Style indentation).
+   * Use `"    private"` for AOSP (4-space) scenarios.
+   */
+  indentCheck?: string;
 }
 
 function addFormatSuite(suiteName: string, scenario: FormatScenario) {
@@ -158,6 +180,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
         }
       }
 
+      // Apply the extra CLI args setting (e.g. "--aosp") when provided.
+      await cfg().update("extra", scenario.extra ?? undefined, GLOBAL);
+
       // Explicitly reload so the extension picks up the new settings without
       // waiting for the user-facing "Update?" notification dialog.
       // For version+mode scenarios this triggers the GitHub API call +
@@ -170,6 +195,7 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       await cfg().update("executable", undefined, GLOBAL);
       await cfg().update("version", "latest", GLOBAL);
       await cfg().update("mode", "native-binary", GLOBAL);
+      await cfg().update("extra", undefined, GLOBAL);
     });
 
     /** True when the prerequisite for this scenario is met. */
@@ -184,6 +210,10 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       : scenario.requiresJava
         ? "  ↳ Skipping: Java 21+ not available on PATH (GJF ≥ 1.22.0 requires Java 21)"
         : null;
+
+    // Resolved per-scenario settings used in test assertions.
+    const formattedFixture = scenario.formattedFixture ?? "FormattedSample.java";
+    const indentCheck = scenario.indentCheck ?? "  private";
 
     // -----------------------------------------------------------------------
     // Tests (identical for every scenario; what differs is how the executable
@@ -207,8 +237,8 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       const formattedText = doc.getText();
       assert.notStrictEqual(formattedText, originalText, "Document should have been reformatted");
       assert.ok(
-        formattedText.includes("  private"),
-        "Formatted code should use 2-space Google Java Style indentation",
+        formattedText.includes(indentCheck),
+        `Formatted code should contain "${indentCheck}" (expected indentation style)`,
       );
 
       await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
@@ -246,7 +276,7 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       }
       this.timeout(60_000);
 
-      const editor = await openFixture("FormattedSample.java");
+      const editor = await openFixture(formattedFixture);
       const doc = editor.document;
       const originalText = doc.getText();
 
@@ -259,6 +289,47 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
         originalText,
         "Already-formatted document should be unchanged",
       );
+    });
+
+    test("format an in-memory (untitled) Java document", async function () {
+      if (!(await isAvailable())) {
+        console.log(skipMsg ?? "  ↳ Skipping");
+        return;
+      }
+      this.timeout(60_000);
+
+      // Create an untitled in-memory document (not backed by a file on disk).
+      // This exercises the formatting provider against a document that has no
+      // file URI, which is a distinct code path from opening a fixture file.
+      const unformattedContent = [
+        "public class InlineTest{",
+        "private int x;",
+        "public int getX(){return x;}",
+        "}",
+      ].join("\n");
+
+      const doc = await vscode.workspace.openTextDocument({
+        language: "java",
+        content: unformattedContent,
+      });
+      await vscode.window.showTextDocument(doc);
+
+      await vscode.commands.executeCommand("editor.action.formatDocument");
+      await waitUntil(() => doc.getText() !== unformattedContent, 30_000);
+
+      const formattedText = doc.getText();
+      assert.notStrictEqual(
+        formattedText,
+        unformattedContent,
+        "In-memory document should have been reformatted",
+      );
+      assert.ok(
+        formattedText.includes(indentCheck),
+        `In-memory document should contain "${indentCheck}" after formatting`,
+      );
+
+      // Close without saving – untitled docs have no on-disk state to revert.
+      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
     });
   });
 }
@@ -406,17 +477,24 @@ suite("Google Java Format for VS Code – e2e", () => {
   //     The extension calls the GitHub Releases API, resolves the download URL,
   //     downloads the binary to its local cache, and runs it.
   //
-  // The following five scenarios exercise every combination:
+  // The `extra` setting is orthogonal – it applies to both approaches and is
+  // exercised by scenarios F and G (AOSP 4-space style).
   //
-  //   A  executable=<local path>         (approach 1)
-  //   B  version=latest  + native-binary (approach 2, no Java needed)
-  //   C  version=latest  + jar-file      (approach 2, Java 21+ needed)
-  //   D  version=1.25.2  + native-binary (approach 2, specific version, no Java)
-  //   E  version=1.25.2  + jar-file      (approach 2, specific version, Java 21+)
+  // The following scenarios exercise realistic configuration combinations:
+  //
+  //   A  executable=<local path>                        (approach 1)
+  //   B  version=latest  + native-binary                (approach 2)
+  //   C  version=latest  + jar-file                     (approach 2, Java 21+)
+  //   D  version=1.25.2  + native-binary                (approach 2, specific)
+  //   E  version=1.25.2  + jar-file                     (approach 2, specific, Java 21+)
+  //   F  version=latest  + native-binary + extra=--aosp (approach 2, AOSP style)
+  //   G  version=latest  + jar-file      + extra=--aosp (approach 2, AOSP + Java 21+)
   //
   // Scenario A is guarded by the GJF_EXECUTABLE env var set by the CI step
-  // "Download GJF native binary (for executable scenario)".  Scenarios B–E
-  // are always attempted; C and E are skipped gracefully when Java is absent.
+  // "Download GJF native binary (for executable scenario)".  Scenarios B–G
+  // are always attempted; C, E and G are skipped gracefully when Java is absent.
+  // Scenarios F and G reuse the binaries cached by B and C respectively, so
+  // they incur no additional download latency.
   // -------------------------------------------------------------------------
 
   addFormatSuite("Scenario A – executable: local file path", {
@@ -443,6 +521,28 @@ suite("Google Java Format for VS Code – e2e", () => {
     version: "1.25.2",
     mode: "jar-file",
     requiresJava: true,
+  });
+
+  addFormatSuite(
+    "Scenario F – version:latest, mode:native-binary, extra:--aosp (AOSP style)",
+    {
+      version: "latest",
+      mode: "native-binary",
+      extra: "--aosp",
+      // AOSP style uses 4-space indentation; use the AOSP-formatted fixture
+      // for the "already-formatted" test and check for 4-space indent.
+      formattedFixture: "AospFormattedSample.java",
+      indentCheck: "    private",
+    },
+  );
+
+  addFormatSuite("Scenario G – version:latest, mode:jar-file, extra:--aosp (AOSP style)", {
+    version: "latest",
+    mode: "jar-file",
+    requiresJava: true,
+    extra: "--aosp",
+    formattedFixture: "AospFormattedSample.java",
+    indentCheck: "    private",
   });
 
   // -------------------------------------------------------------------------
@@ -488,6 +588,22 @@ suite("Google Java Format for VS Code – e2e", () => {
       for (const key of keys) {
         assert.doesNotThrow(() => config.get(key), `config.get('${key}') should not throw`);
       }
+    });
+
+    test("extra CLI argument setting defaults to null", () => {
+      const config = vscode.workspace.getConfiguration(CONFIG);
+      assert.strictEqual(config.get("extra"), null, "Default extra should be null");
+    });
+
+    test("extra CLI argument setting can be updated and read back", async () => {
+      await cfg().update("extra", "--aosp", GLOBAL);
+      assert.strictEqual(cfg().get("extra"), "--aosp", "extra should reflect the updated value");
+      await cfg().update("extra", undefined, GLOBAL);
+      assert.strictEqual(
+        cfg().get("extra"),
+        null,
+        "extra should revert to null after being cleared",
+      );
     });
   });
 });
