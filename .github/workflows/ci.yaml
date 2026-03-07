@@ -97,6 +97,20 @@ jobs:
           name: dist
           path: dist/
 
+      # Download the GJF all-deps jar using the authenticated gh CLI so that
+      # the extension never needs to call the GitHub API during test activation
+      # (avoids rate-limiting / macOS Electron fetch failures).
+      - name: Download google-java-format jar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release download \
+            --repo google/google-java-format \
+            --pattern "*-all-deps.jar" \
+            --dir "${RUNNER_TEMP}"
+          echo "GJF_JAR=$(find "${RUNNER_TEMP}" -name "*-all-deps.jar" | head -1)" >> "${GITHUB_ENV}"
+
       - name: Compile test sources
         run: npm run compile-tests
 

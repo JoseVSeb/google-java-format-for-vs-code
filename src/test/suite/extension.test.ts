@@ -35,6 +35,36 @@ async function openFixture(filename: string) {
 
 suite("Google Java Format for VS Code – e2e", () => {
   // -------------------------------------------------------------------------
+  // Top-level setup: pre-configure the extension executable in CI.
+  //
+  // The extension activates lazily on `onLanguage:java` (i.e. only when the
+  // first Java file is opened).  By setting `executable` *before* any test
+  // opens a Java file we ensure `ExtensionConfiguration.load()` picks it up
+  // and `resolveExecutableFileFromConfig` takes the short-circuit path:
+  //
+  //   if (executable) { return service.getUriFromString(executable); }
+  //
+  // This completely bypasses the GitHub API call (`getLatestRelease`) that
+  // fails on macOS CI runners due to Electron fetch behaviour / rate-limits.
+  // The `GJF_JAR` env var is set by the "Download google-java-format jar"
+  // CI step (using the authenticated `gh` CLI so there are no rate limits).
+  // -------------------------------------------------------------------------
+  suiteSetup(async () => {
+    const jarPath = process.env.GJF_JAR;
+    if (jarPath) {
+      await vscode.workspace
+        .getConfiguration("java.format.settings.google")
+        .update("executable", jarPath, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  suiteTeardown(async () => {
+    // Reset any executable override so settings don't bleed outside the test run.
+    await vscode.workspace
+      .getConfiguration("java.format.settings.google")
+      .update("executable", undefined, vscode.ConfigurationTarget.Global);
+  });
+  // -------------------------------------------------------------------------
   // Extension activation
   // -------------------------------------------------------------------------
 
