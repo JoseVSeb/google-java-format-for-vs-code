@@ -28,5 +28,4 @@ export async function activate(context: ExtensionContext) {
   editService.subscribe();
 }
 
-// biome-ignore lint/suspicious/noEmptyBlockStatements: VS Code extension lifecycle requires deactivate to exist, but no cleanup is needed here
 export function deactivate() {}

@@ -331,6 +331,41 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       // Close without saving – untitled docs have no on-disk state to revert.
       await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
     });
+
+    test("format document with invalid Java shows error notification and leaves content unchanged", async function () {
+      if (!(await isAvailable())) {
+        console.log(skipMsg ?? "  ↳ Skipping");
+        return;
+      }
+      this.timeout(30_000);
+
+      // Feed GJF syntactically invalid Java.  GJF exits non-zero, execSync
+      // throws, and GoogleJavaFormatEditProvider.errorHandler() catches it,
+      // logs the error, and shows a VS Code error notification.  The document
+      // content must remain unchanged.
+      const invalidContent = "this { is {{ not valid java";
+
+      const doc = await vscode.workspace.openTextDocument({
+        language: "java",
+        content: invalidContent,
+      });
+      await vscode.window.showTextDocument(doc);
+
+      // Formatting an invalid file should complete quickly (GJF returns
+      // immediately with a non-zero exit code).
+      await vscode.commands.executeCommand("editor.action.formatDocument");
+
+      // Give the async handler time to settle.
+      await new Promise<void>((resolve) => setTimeout(resolve, 3_000));
+
+      assert.strictEqual(
+        doc.getText(),
+        invalidContent,
+        "Document with invalid Java should remain unchanged after a failed format attempt",
+      );
+
+      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+    });
   });
 }
 
