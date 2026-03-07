@@ -15,7 +15,7 @@ This single command formats code, fixes auto-fixable lint issues, and organizes 
 **Also verify the build compiles cleanly before committing:**
 
 ```sh
-npm run compile-tests
+yarn compile-tests
 ```
 
 This runs `tsc` (TypeScript type-check of the full project including tests) followed by copying test fixtures. Fix any TypeScript errors it reports before committing.
@@ -36,8 +36,8 @@ The hook is defined in `lefthook.yml` at the repository root.
 
 | Task | Command |
 |---|---|
-| Compile (webpack) | `npm run compile` |
-| TypeScript type check | `npm run compile-tests` |
-| Run tests | `npm run test:ci` |
-| Lint only | `npm run lint` |
+| Compile (webpack) | `yarn compile` |
+| TypeScript type check | `yarn compile-tests` |
+| Run tests | `yarn test:ci` |
+| Lint only | `yarn lint` |
 | Format + lint + fix | `npx biome check --write .` |

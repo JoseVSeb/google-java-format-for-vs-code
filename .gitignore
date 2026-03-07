@@ -6,3 +6,5 @@ node_modules
 cache
 coverage
 *.env*
+.yarn/
+package-lock.json

@@ -22,13 +22,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: yarn
 
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --immutable
 
       - name: Biome check
-        run: npm run check
+        run: yarn check
 
   # -----------------------------------------------------------------------
   # Build dev bundle once (with source maps for coverage)
@@ -45,13 +45,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: yarn
 
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --immutable
 
       - name: Dev build (with source maps)
-        run: npm run compile
+        run: yarn compile
 
       - name: Upload dev bundle
         uses: actions/upload-artifact@v4
@@ -86,7 +86,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: yarn
 
       - name: Install Java (needed for jar-file mode tests)
         uses: actions/setup-java@v4
@@ -98,7 +98,7 @@ jobs:
           java-version: "21"
 
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --immutable
 
       - name: Download dev bundle
         uses: actions/download-artifact@v4
@@ -141,7 +141,7 @@ jobs:
           [ -n "$BIN" ] && echo "GJF_EXECUTABLE=$BIN" >> "$GITHUB_ENV" || true
 
       - name: Compile test sources
-        run: npm run compile-tests
+        run: yarn compile-tests
 
       # Linux requires a virtual display for the Electron window
       - name: Install Xvfb (Linux)
