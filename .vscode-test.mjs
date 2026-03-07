@@ -20,8 +20,8 @@ export default defineConfig({
   },
   coverage: {
     includeAll: true,
-    include: ["out/**/*.js"],
-    exclude: ["out/test/**", "node_modules/**"],
+    include: ["dist/**/*.js"],
+    exclude: ["node_modules/**"],
     reporter: ["html", "text"],
   },
 });

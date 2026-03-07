@@ -17,7 +17,16 @@ const extensionConfig = {
     // the bundle is stored in the 'dist' folder (check package.json), 📖 -> https://webpack.js.org/configuration/output/
     path: path.resolve(__dirname, 'dist'),
     filename: 'extension.js',
-    libraryTarget: 'commonjs2'
+    libraryTarget: 'commonjs2',
+    // Emit paths relative to the output directory so source-map-aware tools
+    // (e.g. c8 / @vscode/test-cli coverage) resolve them back to the real
+    // source files instead of keeping the webpack:// protocol prefix.
+    devtoolModuleFilenameTemplate: (/** @type {{ absoluteResourcePath: string }} */ info) => {
+      const abs = info.absoluteResourcePath;
+      return path.isAbsolute(abs)
+        ? path.relative(path.resolve(__dirname, 'dist'), abs)
+        : abs;
+    },
   },
   externals: {
     vscode: 'commonjs vscode' // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/

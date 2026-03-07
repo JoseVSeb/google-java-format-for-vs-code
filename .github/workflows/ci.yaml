@@ -107,7 +107,11 @@ jobs:
 
       - name: Run e2e tests with coverage (Linux – Xvfb)
         if: runner.os == 'Linux'
-        run: xvfb-run -a npx vscode-test --coverage --coverage-reporter lcovonly
+        # Rebuild with 'compile' (devtool: nosources-source-map) so the bundle
+        # contains //# sourceMappingURL= — without it c8 cannot resolve sources
+        # and lcov ends up referencing dist/extension.js instead of src/**/*.ts,
+        # which causes Codecov to report "source code unavailability".
+        run: npm run compile && xvfb-run -a npx vscode-test --coverage --coverage-reporter lcovonly
 
       - name: Run e2e tests (macOS / Windows)
         if: runner.os != 'Linux'
