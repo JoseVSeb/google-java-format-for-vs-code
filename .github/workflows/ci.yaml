@@ -105,10 +105,43 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get install -y xvfb
 
-      - name: Run e2e tests (Linux – Xvfb)
+      - name: Run e2e tests with coverage (Linux – Xvfb)
         if: runner.os == 'Linux'
-        run: xvfb-run -a node ./out/test/runTest.js
+        run: xvfb-run -a npx vscode-test --coverage --coverage-reporter lcovonly
 
       - name: Run e2e tests (macOS / Windows)
         if: runner.os != 'Linux'
-        run: node ./out/test/runTest.js
+        run: npx vscode-test
+
+      - name: Upload coverage report
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: warn
+
+  # -----------------------------------------------------------------------
+  # Upload coverage to Codecov (only from the Linux run)
+  # -----------------------------------------------------------------------
+  coverage:
+    name: Upload coverage to Codecov
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/lcov.info
+          fail_ci_if_error: false

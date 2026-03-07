@@ -1,4 +1,3 @@
-import com.example.Foo;
 import java.util.List;
 
 /** A well-formatted sample Java class used as a test fixture. */

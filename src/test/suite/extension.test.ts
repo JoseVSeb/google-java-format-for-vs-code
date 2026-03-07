@@ -63,8 +63,9 @@ suite("Google Java Format for VS Code – e2e", () => {
       const ext = vscode.extensions.getExtension(EXTENSION_ID);
       assert.ok(ext);
       await ext?.activate();
-      // The exports object is set by VS Code after activation
-      assert.strictEqual(typeof ext?.exports, "object");
+      // Our extension does not expose a public API surface, so exports is
+      // undefined – but activate() must not throw.
+      assert.ok(ext?.isActive, "Extension should still be active after explicit activate() call");
     });
   });
 
@@ -195,7 +196,7 @@ suite("Google Java Format for VS Code – e2e", () => {
       );
 
       // Revert to avoid side-effects on the fixture file
-      await vscode.commands.executeCommand("workbench.action.revertFile");
+      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
     });
 
     test("format range applies edits only within the selected range", async function () {
@@ -218,7 +219,7 @@ suite("Google Java Format for VS Code – e2e", () => {
 
       assert.notStrictEqual(doc.getText(), originalText, "Selection should have been reformatted");
 
-      await vscode.commands.executeCommand("workbench.action.revertFile");
+      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
     });
 
     test("already-formatted document is unchanged after formatting", async function () {
