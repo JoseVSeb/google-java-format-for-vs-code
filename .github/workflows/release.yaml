@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - next
 
 jobs:
   release:
@@ -35,3 +36,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          VSCE_PRE_RELEASE: ${{ github.ref_name == 'next' && 'true' || 'false' }}
