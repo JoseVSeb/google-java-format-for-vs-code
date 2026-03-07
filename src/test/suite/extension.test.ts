@@ -70,7 +70,7 @@ async function isJava21Available(): Promise<boolean> {
     // `java -version` writes to stderr on most JVMs
     const output = (result.stderr ?? "") + (result.stdout ?? "");
     const match = output.match(/version "(\d+)/);
-    return match ? Number.parseInt(match[1]) >= 21 : false;
+    return match ? Number.parseInt(match[1], 10) >= 21 : false;
   } catch {
     return false;
   }
