@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-    branches: ["**"]
+    branches: [main]
 
 jobs:
   # -----------------------------------------------------------------------
@@ -108,44 +108,7 @@ jobs:
       - name: Run e2e tests (Linux – Xvfb)
         if: runner.os == 'Linux'
         run: xvfb-run -a node ./out/test/runTest.js
-        env:
-          VSCODE_TEST_COVERAGE: "1"
 
       - name: Run e2e tests (macOS / Windows)
         if: runner.os != 'Linux'
         run: node ./out/test/runTest.js
-        env:
-          VSCODE_TEST_COVERAGE: "1"
-
-      - name: Upload coverage report
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/
-          if-no-files-found: ignore
-
-  # -----------------------------------------------------------------------
-  # Upload coverage to Codecov (only from the Linux run)
-  # -----------------------------------------------------------------------
-  coverage:
-    name: Upload coverage to Codecov
-    needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download coverage report
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/
-
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage/lcov.info
-          fail_ci_if_error: false

@@ -20,9 +20,13 @@ export async function run() {
   }
 
   // Run the mocha test
-  mocha.run((failures) => {
-    if (failures > 0) {
-      throw new Error(`${failures} tests failed.`);
-    }
+  await new Promise<void>((resolve, reject) => {
+    mocha.run((failures) => {
+      if (failures > 0) {
+        reject(new Error(`${failures} tests failed.`));
+      } else {
+        resolve();
+      }
+    });
   });
 }
