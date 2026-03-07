@@ -60,11 +60,10 @@ jobs:
           path: dist/
 
   # -----------------------------------------------------------------------
-  # e2e tests (against the production build)
+  # e2e tests (compiled with source maps – used for all platforms)
   # -----------------------------------------------------------------------
   test:
     name: e2e tests (${{ matrix.os }})
-    needs: build
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -91,11 +90,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Download production bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
+      - name: Build extension (with source maps)
+        run: npm run compile
 
       - name: Compile test sources
         run: npm run compile-tests
@@ -107,11 +103,7 @@ jobs:
 
       - name: Run e2e tests with coverage (Linux – Xvfb)
         if: runner.os == 'Linux'
-        # Rebuild with 'compile' (devtool: nosources-source-map) so the bundle
-        # contains //# sourceMappingURL= — without it c8 cannot resolve sources
-        # and lcov ends up referencing dist/extension.js instead of src/**/*.ts,
-        # which causes Codecov to report "source code unavailability".
-        run: npm run compile && xvfb-run -a npx vscode-test --coverage --coverage-reporter lcovonly
+        run: xvfb-run -a npx vscode-test --coverage --coverage-reporter lcovonly
 
       - name: Run e2e tests (macOS / Windows)
         if: runner.os != 'Linux'
