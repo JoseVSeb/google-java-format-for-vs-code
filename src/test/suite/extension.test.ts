@@ -8,6 +8,20 @@ import * as vscode from "vscode";
 
 const EXTENSION_ID = "josevseb.google-java-format-for-vs-code";
 const FIXTURES_DIR = path.resolve(__dirname, "..", "..", "test", "fixtures");
+const CONFIG = "java.format.settings.google";
+const GLOBAL = vscode.ConfigurationTarget.Global;
+
+/** Convenience accessor for the extension configuration section. */
+function cfg() {
+  return vscode.workspace.getConfiguration(CONFIG);
+}
+
+/** Reset all extension settings to their shipped defaults. */
+async function resetConfig(): Promise<void> {
+  await cfg().update("executable", undefined, GLOBAL);
+  await cfg().update("version", "latest", GLOBAL);
+  await cfg().update("mode", "native-binary", GLOBAL);
+}
 
 /** Wait until a condition becomes truthy, polling every 100 ms. */
 async function waitUntil(
@@ -41,58 +55,144 @@ async function isJavaAvailable(): Promise<boolean> {
 }
 
 /**
- * Creates a Mocha sub-suite that tests the full format pipeline for one
- * executable configuration.
+ * Returns true when Java 21+ is available on PATH.
  *
- * @param suiteName  Mocha suite title.
- * @param envVar     Name of the env var that holds the absolute path to the
- *                   executable.  When the env var is not set every test in
- *                   the suite is skipped gracefully.
- * @param requiresJava  Set to `false` for native-binary scenarios: the binary
- *                   is a self-contained GraalVM native image and does NOT
- *                   need a JVM on PATH.  Defaults to `true` (jar-file mode).
+ * GJF ≥ 1.22.0 uses Java 21 compiler APIs (JCTree$JCAnyPattern etc.) and
+ * refuses to start on older JVMs.  Jar-file-mode tests are skipped when Java
+ * is absent or older than 21 so they fail fast rather than timing out.
  */
-function addFormatSuite(
-  suiteName: string,
-  envVar: string,
-  /** Set to false for native-binary tests; the binary needs no JVM. */
-  requiresJava = true,
-) {
+async function isJava21Available(): Promise<boolean> {
+  if (!(await isJavaAvailable())) return false;
+  try {
+    const { spawnSync } = await import("node:child_process");
+    const result = spawnSync("java", ["-version"], { encoding: "utf8" });
+    // `java -version` writes to stderr on most JVMs
+    const output = (result.stderr ?? "") + (result.stdout ?? "");
+    const match = output.match(/version "(\d+)/);
+    return match ? Number.parseInt(match[1]) >= 21 : false;
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Format-suite factory
+//
+// Each call to addFormatSuite() registers a Mocha sub-suite that exercises
+// the full format pipeline for ONE specific extension configuration.
+//
+// Two configuration approaches are supported (matching the two documented
+// ways to configure the extension):
+//
+//   1. `executable` override  – set `java.format.settings.google.executable`
+//      to a pre-downloaded local file path.  `version` and `mode` are ignored
+//      by the extension in this case.  Use when you already have the binary
+//      and want to bypass the auto-download logic.
+//
+//   2. `version` + `mode` auto-download  – the extension calls the GitHub
+//      Releases API, resolves the download URL for the requested version and
+//      artifact type, downloads the file into its local cache, and runs it.
+//      This is the normal (recommended) code path.
+//
+// The `extra` CLI-argument config setting is orthogonal – it applies to both
+// approaches, so it does not appear in this scenario matrix.
+// ---------------------------------------------------------------------------
+
+interface FormatScenario {
+  /**
+   * Name of the environment variable whose value is the path to a
+   * pre-downloaded local executable.  When set, this scenario tests the
+   * `executable` override code path (approach 1 above).
+   * If the env var is absent the tests in this suite are skipped gracefully.
+   */
+  executableEnvVar?: string;
+
+  /**
+   * GJF version to configure (approach 2).  Use `"latest"` or a concrete
+   * semver string like `"1.25.2"`.
+   */
+  version?: string;
+
+  /**
+   * Artifact type to configure (approach 2): `"jar-file"` or
+   * `"native-binary"`.  When `"jar-file"`, the extension downloads and runs
+   * the all-deps jar; Java 21+ must be on PATH.  When `"native-binary"`,
+   * the extension downloads the GraalVM native image for the current
+   * platform and runs it directly (no JVM required); on platforms without a
+   * native image the extension falls back to the jar.
+   */
+  mode?: "jar-file" | "native-binary";
+
+  /** Set to true when this scenario's artifact requires Java 21+ on PATH. */
+  requiresJava?: boolean;
+}
+
+function addFormatSuite(suiteName: string, scenario: FormatScenario) {
   suite(suiteName, () => {
-    suiteSetup(async () => {
-      const execPath = process.env[envVar];
-      if (!execPath) return;
-      await vscode.workspace
-        .getConfiguration("java.format.settings.google")
-        .update("executable", execPath, vscode.ConfigurationTarget.Global);
-      // Explicitly reload so the extension picks up the new path without
+    // -----------------------------------------------------------------------
+    // Setup: configure the extension for this scenario and let it (re)load
+    // the appropriate executable.  When the scenario uses version+mode, the
+    // extension calls the GitHub Releases API and downloads the binary into
+    // its local cache – allow up to 2 minutes for this step.
+    // -----------------------------------------------------------------------
+    suiteSetup(async function (this: Mocha.Context) {
+      this.timeout(120_000);
+
+      if (scenario.executableEnvVar) {
+        // Approach 1: explicit executable path
+        const execPath = process.env[scenario.executableEnvVar];
+        if (!execPath) return; // tests in this suite will skip via isAvailable()
+        await cfg().update("executable", execPath, GLOBAL);
+        // version/mode are ignored when executable is set, but clear them for
+        // clarity so the VS Code settings inspector looks clean.
+        await cfg().update("version", undefined, GLOBAL);
+        await cfg().update("mode", undefined, GLOBAL);
+      } else {
+        // Approach 2: version + mode auto-download
+        await cfg().update("executable", undefined, GLOBAL); // must be clear
+        if (scenario.version !== undefined) {
+          await cfg().update("version", scenario.version, GLOBAL);
+        }
+        if (scenario.mode !== undefined) {
+          await cfg().update("mode", scenario.mode, GLOBAL);
+        }
+      }
+
+      // Explicitly reload so the extension picks up the new settings without
       // waiting for the user-facing "Update?" notification dialog.
+      // For version+mode scenarios this triggers the GitHub API call +
+      // binary download on a cache miss.
       await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
     });
 
     suiteTeardown(async () => {
-      // Restore to the latest jar set by the top-level suiteSetup.
-      const jar = process.env.GJF_JAR;
-      await vscode.workspace
-        .getConfiguration("java.format.settings.google")
-        .update("executable", jar || undefined, vscode.ConfigurationTarget.Global);
-      if (jar) {
-        await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
-      }
+      // Reset all settings to defaults so the next suite/scenario starts clean.
+      await cfg().update("executable", undefined, GLOBAL);
+      await cfg().update("version", "latest", GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
     });
 
-    /** Returns true when this suite's prerequisite env var and runtime are available. */
+    /** True when the prerequisite for this scenario is met. */
     async function isAvailable(): Promise<boolean> {
-      if (!process.env[envVar]) return false;
-      if (requiresJava && !(await isJavaAvailable())) return false;
+      if (scenario.executableEnvVar && !process.env[scenario.executableEnvVar]) return false;
+      if (scenario.requiresJava && !(await isJava21Available())) return false;
       return true;
     }
 
-    const skipMsg = `  ↳ Skipping: ${envVar} not set${requiresJava ? " or Java not available" : ""}`;
+    const skipMsg = scenario.executableEnvVar
+      ? `  ↳ Skipping: ${scenario.executableEnvVar} env var not set`
+      : scenario.requiresJava
+        ? "  ↳ Skipping: Java 21+ not available on PATH (GJF ≥ 1.22.0 requires Java 21)"
+        : null;
+
+    // -----------------------------------------------------------------------
+    // Tests (identical for every scenario; what differs is how the executable
+    // was obtained and which code path in the extension exercised)
+    // -----------------------------------------------------------------------
 
     test("format document applies edits to an unformatted Java file", async function () {
       if (!(await isAvailable())) {
-        console.log(skipMsg);
+        console.log(skipMsg ?? "  ↳ Skipping");
         return;
       }
       this.timeout(60_000);
@@ -116,7 +216,7 @@ function addFormatSuite(
 
     test("format range applies edits only within the selected range", async function () {
       if (!(await isAvailable())) {
-        console.log(skipMsg);
+        console.log(skipMsg ?? "  ↳ Skipping");
         return;
       }
       this.timeout(60_000);
@@ -141,7 +241,7 @@ function addFormatSuite(
 
     test("already-formatted document is unchanged after formatting", async function () {
       if (!(await isAvailable())) {
-        console.log(skipMsg);
+        console.log(skipMsg ?? "  ↳ Skipping");
         return;
       }
       this.timeout(60_000);
@@ -169,38 +269,22 @@ function addFormatSuite(
 
 suite("Google Java Format for VS Code – e2e", () => {
   // -------------------------------------------------------------------------
-  // Top-level setup: pre-configure the extension executable in CI.
-  //
-  // The extension activates lazily on `onLanguage:java` (i.e. only when the
-  // first Java file is opened).  By setting `executable` *before* any test
-  // opens a Java file we ensure `ExtensionConfiguration.load()` picks it up
-  // and `resolveExecutableFileFromConfig` takes the short-circuit path:
-  //
-  //   if (executable) { return service.getUriFromString(executable); }
-  //
-  // This completely bypasses the GitHub API call (`getLatestRelease`) that
-  // fails on macOS CI runners due to Electron fetch behaviour / rate-limits.
-  // The `GJF_JAR` env var is set by the "Download google-java-format jar"
-  // CI step (using the authenticated `gh` CLI so there are no rate limits).
+  // Global teardown: ensure no test-specific settings linger after the run.
+  // Each format-scenario suite manages its own setup/teardown, so the global
+  // teardown only needs to do a final reset.
   // -------------------------------------------------------------------------
-  suiteSetup(async () => {
-    const jarPath = process.env.GJF_JAR;
-    if (jarPath) {
-      await vscode.workspace
-        .getConfiguration("java.format.settings.google")
-        .update("executable", jarPath, vscode.ConfigurationTarget.Global);
-    }
-  });
-
   suiteTeardown(async () => {
-    // Reset any executable override so settings don't bleed outside the test run.
-    await vscode.workspace
-      .getConfiguration("java.format.settings.google")
-      .update("executable", undefined, vscode.ConfigurationTarget.Global);
+    await resetConfig();
   });
 
   // -------------------------------------------------------------------------
   // Extension activation
+  //
+  // Without any pre-configured executable, the extension activates with the
+  // default settings (version=latest, mode=native-binary).  On first
+  // activation it calls the GitHub Releases API and downloads the native
+  // binary into the local cache.  Allow up to 90 s (test timeout) to
+  // accommodate this.
   // -------------------------------------------------------------------------
 
   suite("Extension activation", () => {
@@ -209,18 +293,20 @@ suite("Google Java Format for VS Code – e2e", () => {
       assert.ok(ext, `Extension ${EXTENSION_ID} not found`);
     });
 
-    test("extension activates without errors", async () => {
+    test("extension activates without errors", async function () {
+      this.timeout(90_000);
       const ext = vscode.extensions.getExtension(EXTENSION_ID);
       assert.ok(ext, `Extension ${EXTENSION_ID} not found`);
 
-      // Activate is triggered by opening a Java file
+      // Activation is triggered by opening a Java file
       const doc = await vscode.workspace.openTextDocument({
         language: "java",
         content: "public class Tmp {}",
       });
       await vscode.window.showTextDocument(doc);
 
-      await waitUntil(() => ext.isActive, 15_000);
+      // Allow up to 60 s for waitUntil (test timeout is 90 s to include overhead).
+      await waitUntil(() => ext.isActive, 60_000);
       assert.ok(ext.isActive, "Extension should be active after opening a Java document");
     });
 
@@ -228,8 +314,6 @@ suite("Google Java Format for VS Code – e2e", () => {
       const ext = vscode.extensions.getExtension(EXTENSION_ID);
       assert.ok(ext);
       await ext?.activate();
-      // Our extension does not expose a public API surface, so exports is
-      // undefined – but activate() must not throw.
       assert.ok(ext?.isActive, "Extension should still be active after explicit activate() call");
     });
   });
@@ -240,7 +324,6 @@ suite("Google Java Format for VS Code – e2e", () => {
 
   suite("Command registration", () => {
     suiteSetup(async () => {
-      // Ensure extension is active before checking commands
       const ext = vscode.extensions.getExtension(EXTENSION_ID);
       if (ext && !ext.isActive) {
         const doc = await vscode.workspace.openTextDocument({
@@ -248,7 +331,7 @@ suite("Google Java Format for VS Code – e2e", () => {
           content: "public class Tmp {}",
         });
         await vscode.window.showTextDocument(doc);
-        await waitUntil(() => ext.isActive, 15_000);
+        await waitUntil(() => ext.isActive, 60_000);
       }
     });
 
@@ -275,18 +358,12 @@ suite("Google Java Format for VS Code – e2e", () => {
 
   suite("Formatter registration", () => {
     test("a document range formatting provider is registered for Java", async () => {
-      // Open a Java file; VS Code should resolve at least one range formatter
       const doc = await vscode.workspace.openTextDocument({
         language: "java",
         content: "public class A {}",
       });
       await vscode.window.showTextDocument(doc);
 
-      // Formatting providers can't be enumerated directly, but requesting edits
-      // without a real executable will either return edits or an error message—
-      // not throw an unhandled exception at the registration layer.
-      const _range = new vscode.Range(0, 0, doc.lineCount, 0);
-      // We just verify the call doesn't throw a "no provider" error
       let threw = false;
       try {
         await vscode.commands.executeCommand<vscode.TextEdit[]>(
@@ -296,8 +373,6 @@ suite("Google Java Format for VS Code – e2e", () => {
       } catch {
         threw = true;
       }
-      // A missing formatter registration would throw "no formatter registered".
-      // An error from the executable itself (e.g. not found) is acceptable here.
       assert.strictEqual(threw, false, "Format command should not throw at the provider level");
     });
   });
@@ -308,33 +383,67 @@ suite("Google Java Format for VS Code – e2e", () => {
 
   suite("Log output channel", () => {
     test("output channel named 'Google Java Format for VS Code' is created on activation", async () => {
-      // Indirect check: extension must be active (which creates the channel)
       const ext = vscode.extensions.getExtension(EXTENSION_ID);
       assert.ok(ext);
-      await waitUntil(() => ext?.isActive, 15_000);
+      await waitUntil(() => ext?.isActive, 60_000);
       assert.ok(ext?.isActive);
-      // If the output channel was not created, the extension would have thrown
-      // during activate(), which we'd detect above as ext not becoming active.
     });
   });
 
   // -------------------------------------------------------------------------
   // Format document – scenario matrix
   //
-  // Three independent sub-suites test the full format pipeline for each
-  // artifact type the extension supports.  Each is guarded by an env var
-  // pre-set by the "Download google-java-format …" CI steps so that local
-  // developer machines without those env vars skip gracefully.
+  // The extension can be pointed at GJF in two mutually-exclusive ways:
+  //
+  //   Approach 1 – executable override:
+  //     Set `java.format.settings.google.executable` to a file path or URL.
+  //     The extension uses that binary directly; `version` and `mode` are
+  //     ignored.
+  //
+  //   Approach 2 – version + mode (recommended):
+  //     Set `java.format.settings.google.version` (e.g. "latest" or "1.25.2")
+  //     and `java.format.settings.google.mode` ("native-binary" or "jar-file").
+  //     The extension calls the GitHub Releases API, resolves the download URL,
+  //     downloads the binary to its local cache, and runs it.
+  //
+  // The following five scenarios exercise every combination:
+  //
+  //   A  executable=<local path>         (approach 1)
+  //   B  version=latest  + native-binary (approach 2, no Java needed)
+  //   C  version=latest  + jar-file      (approach 2, Java 21+ needed)
+  //   D  version=1.25.2  + native-binary (approach 2, specific version, no Java)
+  //   E  version=1.25.2  + jar-file      (approach 2, specific version, Java 21+)
+  //
+  // Scenario A is guarded by the GJF_EXECUTABLE env var set by the CI step
+  // "Download GJF native binary (for executable scenario)".  Scenarios B–E
+  // are always attempted; C and E are skipped gracefully when Java is absent.
   // -------------------------------------------------------------------------
 
-  // Scenario A: explicit jar-file path (latest release)
-  addFormatSuite("Format document – jar-file (latest)", "GJF_JAR", true);
+  addFormatSuite("Scenario A – executable: local file path", {
+    executableEnvVar: "GJF_EXECUTABLE",
+  });
 
-  // Scenario B: explicit jar-file path (specific pinned version)
-  addFormatSuite("Format document – jar-file (specific version v1.25.2)", "GJF_JAR_SPECIFIC", true);
+  addFormatSuite("Scenario B – version:latest, mode:native-binary (auto-download)", {
+    version: "latest",
+    mode: "native-binary",
+  });
 
-  // Scenario C: native binary (GraalVM native image, no JVM needed at runtime)
-  addFormatSuite("Format document – native binary", "GJF_NATIVE", false);
+  addFormatSuite("Scenario C – version:latest, mode:jar-file (auto-download)", {
+    version: "latest",
+    mode: "jar-file",
+    requiresJava: true,
+  });
+
+  addFormatSuite("Scenario D – version:1.25.2, mode:native-binary (auto-download)", {
+    version: "1.25.2",
+    mode: "native-binary",
+  });
+
+  addFormatSuite("Scenario E – version:1.25.2, mode:jar-file (auto-download)", {
+    version: "1.25.2",
+    mode: "jar-file",
+    requiresJava: true,
+  });
 
   // -------------------------------------------------------------------------
   // Clear cache command
@@ -348,9 +457,6 @@ suite("Google Java Format for VS Code – e2e", () => {
       try {
         await vscode.commands.executeCommand("googleJavaFormatForVSCode.clearCache");
       } catch (e) {
-        // The command may internally trigger reloadExecutable which may fail
-        // if no network – that's acceptable.  An unregistered command would
-        // throw "command not found".
         const msg = (e as Error)?.message ?? "";
         if (msg.includes("command 'googleJavaFormatForVSCode.clearCache' not found")) {
           errorThrown = true;
@@ -366,7 +472,7 @@ suite("Google Java Format for VS Code – e2e", () => {
 
   suite("Extension configuration", () => {
     test("default configuration values are available", () => {
-      const config = vscode.workspace.getConfiguration("java.format.settings.google");
+      const config = vscode.workspace.getConfiguration(CONFIG);
       assert.strictEqual(config.get("version"), "latest", "Default version should be 'latest'");
       assert.strictEqual(
         config.get("mode"),
@@ -376,9 +482,8 @@ suite("Google Java Format for VS Code – e2e", () => {
     });
 
     test("configuration section is recognised by VS Code", () => {
-      const config = vscode.workspace.getConfiguration("java.format.settings.google");
+      const config = vscode.workspace.getConfiguration(CONFIG);
       assert.ok(config, "Configuration section should be accessible");
-      // The four contributed config keys should be readable
       const keys = ["executable", "version", "mode", "extra"];
       for (const key of keys) {
         assert.doesNotThrow(() => config.get(key), `config.get('${key}') should not throw`);

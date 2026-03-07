@@ -100,56 +100,34 @@ jobs:
           name: dist
           path: dist/
 
-      # Download the GJF all-deps jar using the authenticated gh CLI so that
-      # the extension never needs to call the GitHub API during test activation
-      # (avoids rate-limiting / macOS Electron fetch failures).
-      - name: Download google-java-format jar (latest)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          gh release download \
-            --repo google/google-java-format \
-            --pattern "*-all-deps.jar" \
-            --dir "${RUNNER_TEMP}"
-          echo "GJF_JAR=$(find "${RUNNER_TEMP}" -name "*-all-deps.jar" | head -1)" >> "${GITHUB_ENV}"
-
-      # Download a pinned older release to exercise the "specific version" code path.
-      - name: Download google-java-format jar (specific version v1.25.2)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          gh release download v1.25.2 \
-            --repo google/google-java-format \
-            --pattern "*-all-deps.jar" \
-            --dir "${RUNNER_TEMP}/gjf-specific" || true
-          SPECIFIC=$(find "${RUNNER_TEMP}/gjf-specific" -name "*-all-deps.jar" | head -1)
-          [ -n "$SPECIFIC" ] && echo "GJF_JAR_SPECIFIC=$SPECIFIC" >> "$GITHUB_ENV" || true
-
-      # Download the native binary for the current platform to exercise the
-      # "native-binary" code path.  The binary name pattern is OS-specific.
-      - name: Download google-java-format native binary
+      # --------------------------------------------------------------------------
+      # Pre-download the current platform's GJF native binary for Scenario A
+      # (the "executable override" test).  This is the ONLY artifact that needs
+      # to be pre-downloaded by CI; all other format scenarios (B–E) exercise
+      # the extension's own version+mode auto-download code path and need
+      # nothing pre-staged.
+      # --------------------------------------------------------------------------
+      - name: Download GJF native binary (for executable scenario)
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           case "$RUNNER_OS" in
-            Linux)   PATTERN="*-linux-x86-64"           ;;
-            macOS)   PATTERN="*-darwin-arm64"            ;;
-            # Note: `macos-latest` in GitHub Actions is now ARM64 (Apple
-            # Silicon).  If a future runner uses x86-64 there is no macOS
-            # x86-64 native binary in GJF releases, so the download will
-            # return nothing and GJF_NATIVE will remain unset (tests skip).
-            Windows) PATTERN="*-windows-x86-64.exe"      ;;
-            *)       exit 0                              ;;
+            Linux)   PATTERN="*-linux-x86-64"          ;;
+            macOS)   PATTERN="*-darwin-arm64"           ;;
+            # Note: macos-latest runners are now ARM64 (Apple Silicon).
+            # There is no macOS x86-64 native binary in GJF releases, so if a
+            # future runner uses x86-64, the download will return nothing and
+            # GJF_EXECUTABLE will remain unset (Scenario A tests skip).
+            Windows) PATTERN="*-windows-x86-64.exe"    ;;
+            *)       exit 0                             ;;
           esac
           gh release download \
             --repo google/google-java-format \
             --pattern "$PATTERN" \
             --dir "${RUNNER_TEMP}/gjf-native" || true
           BIN=$(find "${RUNNER_TEMP}/gjf-native" -type f | head -1)
-          [ -n "$BIN" ] && echo "GJF_NATIVE=$BIN" >> "$GITHUB_ENV" || true
+          [ -n "$BIN" ] && echo "GJF_EXECUTABLE=$BIN" >> "$GITHUB_ENV" || true
 
       - name: Compile test sources
         run: npm run compile-tests

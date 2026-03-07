@@ -21,14 +21,39 @@ This extension is available on:
 
 ## Extension Settings
 
-This extension contributes the following settings:
+There are two mutually-exclusive ways to configure which Google Java Format
+executable the extension uses:
 
-* `java.format.settings.google.executable`: *Not Recommended.* Specifies url or file path to [Google Java Format jar executable](https://github.com/google/google-java-format/releases). Overrides `java.format.settings.google.version`.
-* `java.format.settings.google.version`: *Recommended.* Specifies version to be used of [Google Java Format executable](https://github.com/google/google-java-format/releases) in format `{major}.{minor}.{patch}`. Default: `latest`.
-* `java.format.settings.google.mode`: Specifies the runtime mode of [Google Java Format](https://github.com/google/google-java-format/releases). Used with `java.format.settings.google.version`. Default: `native-binary`, alternative: `jar-file`.
-* `java.format.settings.google.extra`: Extra CLI arguments to pass to [Google Java Format](https://github.com/google/google-java-format).
+### Approach 1 – Automatic download (recommended)
 
-Please refer [Google Java Format repository](https://github.com/google/google-java-format) for available versions and CLI arguments.
+Use `version` and `mode` together.  The extension contacts the GitHub Releases
+API, resolves the correct download URL, caches the binary locally, and runs it
+automatically.
+
+* `java.format.settings.google.version`: The GJF release to use.  Accepts
+  `"latest"` (default) or a concrete version string like `"1.25.2"`.
+* `java.format.settings.google.mode`: Which artifact to download and run.
+  * `"native-binary"` (default) – downloads and runs the platform-specific
+    GraalVM native image.  No JVM is required at runtime; on platforms where a
+    native image is not available the extension falls back to the jar.
+  * `"jar-file"` – downloads and runs the all-deps JAR.  Requires Java 21+ on
+    PATH.
+
+### Approach 2 – Explicit executable path (advanced / not recommended)
+
+* `java.format.settings.google.executable`: An absolute file path **or** an
+  HTTP(S) URL pointing to a GJF executable (jar or native binary).  When set,
+  this **overrides** `version` and `mode`; the extension uses the provided
+  binary directly and skips the automatic download entirely.
+
+### Shared setting
+
+* `java.format.settings.google.extra`: Extra CLI arguments passed to GJF
+  (e.g. `"--aosp"`).  This setting applies regardless of which configuration
+  approach above is used.
+
+Please refer to the [Google Java Format repository](https://github.com/google/google-java-format)
+for available versions and CLI arguments.
 
 ## Extension Commands
 
