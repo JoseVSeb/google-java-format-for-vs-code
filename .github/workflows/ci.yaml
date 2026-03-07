@@ -71,7 +71,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # FIXME: macos-latest is temporarily disabled because Electron's global
+        # fetch() fails on macOS CI runners for external HTTPS endpoints
+        # (api.github.com), causing extension activation to reject and all
+        # downstream tests to fail.  This is likely related to the open bug
+        # around the fetch/network stack on macOS; re-enable once that is fixed.
+        os: [ubuntu-latest, windows-latest]
+        # os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@v4

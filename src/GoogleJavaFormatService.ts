@@ -3,7 +3,6 @@ import { Uri } from "vscode";
 import type { GoogleJavaFormatVersion } from "./ExtensionConfiguration";
 import type { GoogleJavaFormatReleaseResponse } from "./GoogleJavaFormatRelease";
 import { parseGoogleJavaFormatReleaseResponse } from "./GoogleJavaFormatRelease";
-import { httpsGet } from "./httpsGet";
 import { logAsyncMethod, logMethod } from "./logDecorator";
 
 /**
@@ -23,7 +22,7 @@ export class GoogleJavaFormatService {
   async getLatestRelease() {
     const url = "https://api.github.com/repos/google/google-java-format/releases/latest";
     this.log.debug("Fetching:", url);
-    const response = await httpsGet(url);
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error("Failed to get latest release of Google Java Format.");
     }
@@ -39,7 +38,7 @@ export class GoogleJavaFormatService {
   async getReleaseByVersion(version: Exclude<GoogleJavaFormatVersion, "latest">) {
     const url = `https://api.github.com/repos/google/google-java-format/releases/tags/v${version}`;
     this.log.debug("Fetching:", url);
-    const response = await httpsGet(url);
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to get v${version} of Google Java Format.`);
     }
