@@ -12,7 +12,7 @@ export default class GoogleJavaFormatterSync implements IGoogleJavaFormatter {
   ) {}
 
   @logAsyncMethod
-  async format(text: string, range?: [number, number], _signal?: AbortSignal): Promise<string> {
+  async format(text: string, range?: [number, number], signal?: AbortSignal): Promise<string> {
     const args: string[] = [];
 
     if (this.config.extra) {
@@ -23,6 +23,6 @@ export default class GoogleJavaFormatterSync implements IGoogleJavaFormatter {
       args.push(`--lines ${range[0]}:${range[1]}`);
     }
 
-    return this.executable.run({ args, stdin: text });
+    return this.executable.run({ args, stdin: text, signal });
   }
 }
