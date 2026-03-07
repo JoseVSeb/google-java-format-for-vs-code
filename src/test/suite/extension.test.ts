@@ -687,9 +687,9 @@ suite("Google Java Format for VS Code – e2e", () => {
       // Best-effort reload; the binary URL for "latest" is already cached in
       // globalState from the earlier format scenarios, so this succeeds even
       // without network access.
-      await vscode.commands
-        .executeCommand("googleJavaFormatForVSCode.reloadExecutable")
-        .catch(() => {});
+      await Promise.resolve(
+        vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
+      ).catch(() => {});
     });
 
     test("https:// URL in executable that returns 404 triggers a load failure", async function () {
@@ -722,9 +722,9 @@ suite("Google Java Format for VS Code – e2e", () => {
       await cfg().update("executable", undefined, GLOBAL);
       await cfg().update("version", "latest", GLOBAL);
       await cfg().update("mode", "native-binary", GLOBAL);
-      await vscode.commands
-        .executeCommand("googleJavaFormatForVSCode.reloadExecutable")
-        .catch(() => {});
+      await Promise.resolve(
+        vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
+      ).catch(() => {});
     });
   });
 });

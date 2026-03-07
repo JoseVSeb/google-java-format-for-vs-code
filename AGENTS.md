@@ -12,6 +12,14 @@ npx biome check --write .
 
 This single command formats code, fixes auto-fixable lint issues, and organizes imports in one pass.
 
+**Also verify the build compiles cleanly before committing:**
+
+```sh
+npm run compile-tests
+```
+
+This runs `tsc` (TypeScript type-check of the full project including tests) followed by copying test fixtures. Fix any TypeScript errors it reports before committing.
+
 ## Git Hooks
 
 [Lefthook](https://github.com/evilmartians/lefthook) is configured to run `biome check --write` on staged files automatically before every commit.
