@@ -31,7 +31,11 @@ async function main() {
     bundle: true,
     format: "cjs",
     minify: production,
-    sourcemap: !production,
+    // In dev/test: inline sourcemap reference (enables c8 coverage).
+    // In production: generate .map file without a bundle reference (equivalent
+    // to webpack's hidden-source-map). The .vscodeignore excludes *.map from
+    // the vsix package, so this is safe and supports offline stack-trace lookup.
+    sourcemap: production ? "external" : true,
     sourcesContent: false,
     platform: "node",
     outfile: "dist/extension.js",
