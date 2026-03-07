@@ -71,7 +71,7 @@
     ]
   },
   "scripts": {
-    "preinstall": "node -e \"const ua = process.env.npm_config_user_agent || ''; if (!ua.startsWith('yarn')) { console.error('\\n⛔  Use yarn to manage dependencies (run: corepack enable && yarn install)\\n'); process.exit(1); }\"",
+    "preinstall": "npx only-allow yarn",
     "vscode:prepublish": "yarn package",
     "prepare": "lefthook install",
     "format": "biome format --write src/",
@@ -108,5 +108,5 @@
     "webpack": "^5.91.0",
     "webpack-cli": "^5.1.4"
   },
-  "packageManager": "yarn@4.13.0"
+  "packageManager": "yarn@4.13.0+sha512.5c20ba010c99815433e5c8453112165e673f1c7948d8d2b267f4b5e52097538658388ebc9f9580656d9b75c5cc996f990f611f99304a2197d4c56d21eea370e7"
 }
