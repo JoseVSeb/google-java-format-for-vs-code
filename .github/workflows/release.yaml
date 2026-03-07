@@ -1,33 +1,45 @@
 name: Release
 
 on:
-    workflow_dispatch:
-    push:
-        branches:
-            - main
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - next
 
 jobs:
-    release:
-        permissions:
-            contents: write
-            issues: write
-            pull-requests: write
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+  release:
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-            - name: Install Node.js
-              uses: actions/setup-node@v3
-              with:
-                  node-version: 20
+      - name: Enable Corepack
+        run: corepack enable
 
-            - name: Install dependencies
-              run: npm ci
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
 
-            - name: Semantic Release
-              run: npx semantic-release
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  VSCE_PAT: ${{ secrets.VSCE_PAT }}
-                  OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Semantic Release
+        run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          # NOTE: VSCE_PRE_RELEASE controls the --pre-release flag passed to `vsce package`,
+          # marking the extension as a pre-release in the VS Code Marketplace when publishing
+          # from the `next` branch. This is intentionally separate from semantic-release's own
+          # `prerelease` branch option (which would produce pre-release semver tags like
+          # 1.2.0-next.1 that the VS Marketplace does not support). The version tag stays a
+          # stable semver string (e.g. 1.2.0) regardless of the branch.
+          VSCE_PRE_RELEASE: ${{ github.ref_name == 'next' && 'true' || 'false' }}

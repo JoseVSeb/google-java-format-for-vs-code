@@ -1,0 +1,198 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Lint & format check via Biome
+  # -----------------------------------------------------------------------
+  lint:
+    name: Biome check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Biome check
+        run: yarn check
+
+  # -----------------------------------------------------------------------
+  # Build dev bundle once (with source maps for coverage)
+  # -----------------------------------------------------------------------
+  build:
+    name: Build (dev)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Dev build (with source maps)
+        run: yarn compile
+
+      - name: Upload dev bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # -----------------------------------------------------------------------
+  # e2e tests (all platforms share the same dev bundle)
+  # -----------------------------------------------------------------------
+  test:
+    name: e2e tests (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # FIXME: macos-latest is temporarily disabled because Electron's global
+        # fetch() fails on macOS CI runners for external HTTPS endpoints
+        # (api.github.com), causing extension activation to reject and all
+        # downstream tests to fail.  This is likely related to the open bug
+        # around the fetch/network stack on macOS; re-enable once that is fixed.
+        os: [ubuntu-latest, windows-latest]
+        # os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: npm install -g corepack@latest --force
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Install Java (needed for jar-file mode tests)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # GJF ≥ 1.22.0 requires Java 21 (uses Java 21 compiler APIs for
+          # pattern matching; running with Java 17 causes NoClassDefFoundError
+          # on JCTree$JCAnyPattern).
+          java-version: "21"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Download dev bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      # --------------------------------------------------------------------------
+      # Pre-download the current platform's GJF native binary for Scenario A
+      # (the "executable override" test).  This is the ONLY artifact that needs
+      # to be pre-downloaded by CI; all other format scenarios (B–E) exercise
+      # the extension's own version+mode auto-download code path and need
+      # nothing pre-staged.
+      #
+      # GJF native-binary asset names use an underscore before the platform
+      # component, e.g. google-java-format_linux-x86-64.  The glob patterns
+      # below match that naming convention.
+      # --------------------------------------------------------------------------
+      - name: Download GJF native binary (for executable scenario)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   PATTERN="*_linux-x86-64"          ;;
+            macOS)   PATTERN="*_darwin-arm64"           ;;
+            # Note: macos-latest runners are now ARM64 (Apple Silicon).
+            # There is no macOS x86-64 native binary in GJF releases, so if a
+            # future runner uses x86-64, the download will return nothing and
+            # GJF_EXECUTABLE will remain unset (Scenario A tests skip).
+            Windows) PATTERN="*_windows-x86-64.exe"    ;;
+            *)       exit 0                             ;;
+          esac
+          mkdir -p "${RUNNER_TEMP}/gjf-native"
+          gh release download \
+            --repo google/google-java-format \
+            --pattern "$PATTERN" \
+            --dir "${RUNNER_TEMP}/gjf-native" || true
+          BIN=$(find "${RUNNER_TEMP}/gjf-native" -type f | head -1)
+          [ -n "$BIN" ] && echo "GJF_EXECUTABLE=$BIN" >> "$GITHUB_ENV" || true
+
+      - name: Compile test sources
+        run: yarn compile-tests
+
+      # Linux requires a virtual display for the Electron window
+      - name: Install Xvfb (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y xvfb
+
+      - name: Run e2e tests with coverage (Linux – Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npx vscode-test --coverage --coverage-reporter lcovonly
+
+      - name: Run e2e tests with coverage (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: npx vscode-test --coverage --coverage-reporter lcovonly
+
+      # Upload per-platform artifacts with unique names (useful for debugging).
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage/
+          if-no-files-found: warn
+
+      # Upload directly to Codecov from each platform.  Codecov automatically
+      # merges all uploads for the same commit SHA, so platform-specific
+      # branches (win32, linux, darwin) are reflected in the combined report.
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/lcov.info
+          flags: ${{ matrix.os }}
+          fail_ci_if_error: false
+
+  # -----------------------------------------------------------------------
+  # Placeholder job so branch-protection rules that require "coverage" to
+  # pass continue to work.  Actual Codecov uploads happen in the test job.
+  # -----------------------------------------------------------------------
+  coverage:
+    name: Coverage uploaded
+    needs: test
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: echo "Coverage reports uploaded from each platform in the test job."

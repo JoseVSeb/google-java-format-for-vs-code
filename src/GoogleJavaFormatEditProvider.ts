@@ -1,96 +1,74 @@
-import {
-    CancellationToken,
-    DocumentFormattingEditProvider,
-    DocumentRangeFormattingEditProvider,
-    // ExtensionContext,
-    FormattingOptions,
-    LogOutputChannel,
-    Range,
-    TextDocument,
-    TextEdit,
-    window,
+import type {
+  CancellationToken,
+  DocumentFormattingEditProvider,
+  DocumentRangeFormattingEditProvider,
+  FormattingOptions,
+  LogOutputChannel,
+  TextDocument,
 } from "vscode";
-import { IGoogleJavaFormatter } from "./IGoogleJavaFormatter";
+import { Range, TextEdit, window } from "vscode";
+import type { IGoogleJavaFormatter } from "./IGoogleJavaFormatter";
+import { logAsyncMethod } from "./logDecorator";
 
 export default class GoogleJavaFormatEditProvider
-    implements
-        DocumentRangeFormattingEditProvider,
-        DocumentFormattingEditProvider
+  implements DocumentRangeFormattingEditProvider, DocumentFormattingEditProvider
 {
-    constructor(
-        private formatter: IGoogleJavaFormatter,
-        private log: LogOutputChannel,
-    ) {}
+  constructor(
+    private formatter: IGoogleJavaFormatter,
+    readonly log: LogOutputChannel,
+  ) {}
 
-    private formatText = async (
-        text: string,
-        range: Range,
-        token: CancellationToken,
-    ): Promise<string> => {
-        const startTime = new Date().getTime();
+  @logAsyncMethod
+  private async formatText(text: string, range: Range, token: CancellationToken): Promise<string> {
+    const startTime = Date.now();
 
-        const controller = new AbortController();
-        token.onCancellationRequested(controller.abort);
+    const controller = new AbortController();
+    token.onCancellationRequested(controller.abort.bind(controller));
 
-        const result = await this.formatter.format(
-            text,
-            [range.start.line + 1, range.end.line + 1],
-            controller.signal,
-        );
+    const result = await this.formatter.format(
+      text,
+      [range.start.line + 1, range.end.line + 1],
+      controller.signal,
+    );
 
-        const duration = new Date().getTime() - startTime;
-        this.log.info(`Formatting completed in ${duration}ms.`);
+    const duration = Date.now() - startTime;
+    this.log.info(`Formatting completed in ${duration}ms.`);
 
-        return result;
-    };
+    return result;
+  }
 
-    private errorHandler = (error: unknown): TextEdit[] => {
-        const message =
-            (error as Error)?.message ??
-            "Failed to format java code using Google Java Format";
+  private errorHandler(error: unknown): TextEdit[] {
+    const message =
+      (error as Error)?.message ?? "Failed to format java code using Google Java Format";
 
-        this.log.error(message, error);
-        window.showErrorMessage(message);
+    this.log.error(message, error as Error);
+    window.showErrorMessage(message);
 
-        return [];
-    };
+    return [];
+  }
 
-    public provideDocumentRangeFormattingEdits = async (
-        document: TextDocument,
-        range: Range,
-        options: FormattingOptions,
-        token: CancellationToken,
-    ): Promise<TextEdit[]> => {
-        const documentRange = new Range(0, 0, document.lineCount, 0);
+  async provideDocumentRangeFormattingEdits(
+    document: TextDocument,
+    range: Range,
+    _options: FormattingOptions,
+    token: CancellationToken,
+  ): Promise<TextEdit[]> {
+    const documentRange = new Range(0, 0, document.lineCount, 0);
 
-        try {
-            const textAfterFormat = await this.formatText(
-                document.getText(),
-                range,
-                token,
-            );
-            return [TextEdit.replace(documentRange, textAfterFormat)];
-        } catch (error) {
-            return this.errorHandler(error);
-        }
-    };
+    try {
+      const textAfterFormat = await this.formatText(document.getText(), range, token);
+      return [TextEdit.replace(documentRange, textAfterFormat)];
+    } catch (error) {
+      return this.errorHandler(error);
+    }
+  }
 
-    public provideDocumentFormattingEdits = async (
-        document: TextDocument,
-        options: FormattingOptions,
-        token: CancellationToken,
-    ): Promise<TextEdit[]> => {
-        const documentRange = new Range(0, 0, document.lineCount, 0);
-
-        try {
-            const textAfterFormat = await this.formatText(
-                document.getText(),
-                documentRange,
-                token,
-            );
-            return [TextEdit.replace(documentRange, textAfterFormat)];
-        } catch (error) {
-            return this.errorHandler(error);
-        }
-    };
+  async provideDocumentFormattingEdits(
+    document: TextDocument,
+    options: FormattingOptions,
+    token: CancellationToken,
+  ): Promise<TextEdit[]> {
+    const range = new Range(0, 0, document.lineCount, 0);
+    return this.provideDocumentRangeFormattingEdits(document, range, options, token);
+  }
 }
