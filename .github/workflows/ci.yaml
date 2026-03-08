@@ -34,7 +34,7 @@ jobs:
           cache: yarn
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: yarn install --frozen-lockfile
 
       - name: Biome check
         run: yarn check
@@ -60,7 +60,7 @@ jobs:
           cache: yarn
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: yarn install --frozen-lockfile
 
       - name: Dev build (with source maps)
         run: yarn compile
@@ -114,7 +114,7 @@ jobs:
           java-version: "21"
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: yarn install --frozen-lockfile
 
       - name: Download dev bundle
         uses: actions/download-artifact@v4
