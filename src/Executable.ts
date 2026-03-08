@@ -1,7 +1,5 @@
 import { execSync } from "node:child_process";
-
-import path = require("node:path");
-
+import path from "node:path";
 import type { ExtensionContext, LogOutputChannel } from "vscode";
 import { commands, ProgressLocation, window } from "vscode";
 import type { Cache } from "./Cache";

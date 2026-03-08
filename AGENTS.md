@@ -12,6 +12,8 @@ npx biome check --write .
 
 This single command formats code, fixes auto-fixable lint issues, and organizes imports in one pass.
 
+Keep import declarations contiguous: do not insert empty lines between consecutive `import` or `import type` statements.
+
 **Also verify the build compiles cleanly before committing:**
 
 ```sh

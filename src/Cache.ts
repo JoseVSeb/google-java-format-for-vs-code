@@ -1,7 +1,5 @@
 import { createHash } from "node:crypto";
-
-import path = require("node:path");
-
+import path from "node:path";
 import type { ExtensionContext, LogOutputChannel } from "vscode";
 import { commands, Uri, workspace } from "vscode";
 import { logAsyncMethod } from "./logDecorator";

@@ -9,17 +9,22 @@
         "dist": true // set this to false to include "dist" folder in search results
     },
     // Turn off tsc task auto detection since we have the necessary tasks as npm scripts
-    "typescript.tsc.autoDetect": "off",
+    "js/ts.tsc.autoDetect": "off",
     "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.biome": "explicit",
+        "source.fixAll.biome": "explicit",
+        "source.organizeImports.biome": "explicit"
+    },
     "eslint.codeActionsOnSave.rules": null,
     "[json]": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode"
+        "editor.defaultFormatter": "biomejs.biome"
     },
     "[typescript]": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode"
+        "editor.defaultFormatter": "biomejs.biome"
     },
     "[jsonc]": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode"
+        "editor.defaultFormatter": "biomejs.biome"
     },
     "conventionalCommits.scopes": ["dependabot"]
 }
