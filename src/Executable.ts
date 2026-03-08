@@ -1,4 +1,4 @@
-import { execFileSync, execSync } from "node:child_process";
+import { execSync } from "node:child_process";
 
 import path = require("node:path");
 
@@ -38,14 +38,14 @@ export class Executable {
     return instance;
   }
 
+  // TODO: signal is accepted for future cancellation support; execSync is synchronous
+  // and cannot honour an AbortSignal mid-execution — switch to async spawn when needed.
   async run({ args, stdin }: { args: string[]; stdin: string; signal?: AbortSignal }) {
-    // TODO: implement cancellation — execFileSync is synchronous and cannot honour
-    // an AbortSignal mid-execution; switch to async spawn with the signal option.
     return new Promise<string>((resolve, reject) => {
-      const allArgs = [...this.runnerArgs, ...args, "-"];
-      this.log.debug(`> ${this.runnerFile} ${allArgs.join(" ")}`);
+      const command = [this.runnerFile, ...this.runnerArgs, ...args, "-"].join(" ");
+      this.log.debug(`> ${command}`);
       try {
-        const stdout = execFileSync(this.runnerFile, allArgs, {
+        const stdout = execSync(command, {
           cwd: this.cwd,
           encoding: "utf8",
           input: stdin,
