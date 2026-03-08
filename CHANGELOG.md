@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [1.2.2](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.2.1...v1.2.2) (2026-03-08)
+
+### Code Refactoring
+
+* migrate tooling, logging decorators, e2e tests, and CI pipeline improvements ([#67](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/67)) ([fb06ebc](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/fb06ebc0389b6edc55dda5987c9989f01dec33fe))
+
 ## [1.2.1](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.2.0...v1.2.1) (2026-03-04)
 
 
