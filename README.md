@@ -5,6 +5,7 @@
 [![Visual Studio Marketplace Rating Stars](https://img.shields.io/visual-studio-marketplace/stars/josevseb.google-java-format-for-vs-code.svg)](https://marketplace.visualstudio.com/items?itemName=josevseb.google-java-format-for-vs-code)
 [![Open VSX Registry](https://img.shields.io/open-vsx/v/josevseb/google-java-format-for-vs-code.svg)](https://open-vsx.org/extension/josevseb/google-java-format-for-vs-code)
 [![GitHub](https://img.shields.io/github/issues/JoseVSeb/google-java-format-for-vs-code.svg)](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues)
+[![release workflow](https://github.com/JoseVSeb/google-java-format-for-vs-code/actions/workflows/release.yaml/badge.svg)](https://github.com/JoseVSeb/google-java-format-for-vs-code/actions/workflows/release.yaml)
 [![codecov](https://codecov.io/gh/JoseVSeb/google-java-format-for-vs-code/branch/main/graph/badge.svg)](https://codecov.io/gh/JoseVSeb/google-java-format-for-vs-code)
 [![semantic-release: conventional commit](https://img.shields.io/badge/semantic--release-conventionalcommit-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
@@ -99,21 +100,23 @@ To run the extension with breakpoints:
 
 1. **Open the repository** in VS Code (`File → Open Folder…`).
 2. Install dependencies: open a terminal and run `yarn install`.
-3. Press **F5** (or run **Run → Start Debugging**).  VS Code compiles the
+3. Set breakpoints anywhere in `src/` in the *development* window — for
+   example, at the top of `activate` in `extension.ts` or inside
+   `provideDocumentRangeFormattingEdits`.
+4. Press **F5** (or run **Run → Start Debugging**).  VS Code compiles the
    extension and launches a second **Extension Development Host** window with
    your local build loaded.
-4. In the *host* window, open or create a `.java` file and trigger formatting
-   (`Shift+Alt+F` on Windows/Linux, `Shift+Option+F` on macOS).  Opening the
-   file fires the `onLanguage:java` activation event, which causes VS Code to
-   call `activate(context)` in your extension for the first time.
-5. Back in the *development* window, set breakpoints anywhere in `src/`.
-   Execution will pause at the next hit — including inside `activate`, the
-   `provideDocumentRangeFormattingEdits` callback, or any command handler.
+5. In the *host* window, open or create a `.java` file.  Opening it fires the
+   `onLanguage:java` activation event, which causes VS Code to call
+   `activate(context)` in your extension for the first time.  Breakpoints
+   inside `activate` will be hit now.
+6. Trigger formatting (`Shift+Alt+F` on Windows/Linux, `Shift+Option+F` on
+   macOS) to hit breakpoints inside the formatting callbacks.
 
-> **Tip:** if your breakpoint in `activate` is never hit, check that a `.java`
-> file is open in the host window *before* you press **F5**.  Alternatively,
-> run one of the extension's commands (e.g. **Reload Executable**) from the
-> host window's Command Palette — that also triggers activation.
+> **Tip:** if your breakpoint in `activate` is never hit, run one of the
+> extension's commands (e.g. **Reload Executable**) from the host window's
+> Command Palette — that also triggers activation without needing a `.java`
+> file open.
 
 ---
 **Enjoy!**
