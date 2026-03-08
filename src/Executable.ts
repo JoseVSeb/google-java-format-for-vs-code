@@ -11,6 +11,7 @@ export class Executable {
   private runnerFile: string = null!;
   private runnerArgs: string[] = null!;
   private cwd: string = null!;
+  private loadPromise: Promise<void> = Promise.resolve();
 
   private constructor(
     private context: ExtensionContext,
@@ -21,10 +22,11 @@ export class Executable {
   ) {
     this.run = this.run.bind(this);
     this.load = this.load.bind(this);
+    this.startLoad = this.startLoad.bind(this);
     this.configurationChangeListener = this.configurationChangeListener.bind(this);
   }
 
-  public static async getInstance(
+  public static getInstance(
     context: ExtensionContext,
     config: ExtensionConfiguration,
     cache: Cache,
@@ -32,13 +34,14 @@ export class Executable {
     log: LogOutputChannel,
   ) {
     const instance = new Executable(context, config, cache, service, log);
-    await instance.load();
+    instance.startLoad();
     return instance;
   }
 
   // TODO: signal is accepted for future cancellation support; execSync is synchronous
   // and cannot honour an AbortSignal mid-execution — switch to async spawn when needed.
   async run({ args, stdin }: { args: string[]; stdin: string; signal?: AbortSignal }) {
+    await this.loadPromise;
     return new Promise<string>((resolve, reject) => {
       const command = [this.runnerFile, ...this.runnerArgs, ...args, "-"].join(" ");
       this.log.debug(`> ${command}`);
@@ -60,8 +63,17 @@ export class Executable {
   subscribe() {
     this.config.subscriptions.push(this.configurationChangeListener);
     this.context.subscriptions.push(
-      commands.registerCommand("googleJavaFormatForVSCode.reloadExecutable", this.load),
+      commands.registerCommand("googleJavaFormatForVSCode.reloadExecutable", this.startLoad),
     );
+  }
+
+  private startLoad(): void {
+    this.loadPromise = this.load();
+    // Attach a no-op handler so that a rejection before the first format attempt
+    // does not produce an "unhandledRejection" warning.  Errors are already
+    // logged by the @logAsyncMethod decorator on load(), and any awaiter of
+    // run() will still observe the rejection through this.loadPromise.
+    this.loadPromise.catch(() => {});
   }
 
   @logAsyncMethod
@@ -122,7 +134,10 @@ export class Executable {
         title: "Updating executable...",
         cancellable: false,
       },
-      this.load,
+      () => {
+        this.startLoad();
+        return this.loadPromise;
+      },
     );
   }
 }
