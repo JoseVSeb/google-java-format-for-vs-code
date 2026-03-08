@@ -38,28 +38,21 @@ export class Executable {
     return instance;
   }
 
-  async run({ args, stdin, signal }: { args: string[]; stdin: string; signal?: AbortSignal }) {
+  async run({ args, stdin }: { args: string[]; stdin: string; signal?: AbortSignal }) {
+    // TODO: implement cancellation — execFileSync is synchronous and cannot honour
+    // an AbortSignal mid-execution; switch to async spawn with the signal option.
     return new Promise<string>((resolve, reject) => {
       const allArgs = [...this.runnerArgs, ...args, "-"];
-      const debugCmd = `${this.runnerFile} ${allArgs.join(" ")}`;
-      this.log.debug(`> ${debugCmd}`);
+      this.log.debug(`> ${this.runnerFile} ${allArgs.join(" ")}`);
       try {
-        // `signal` is supported by execFileSync at runtime in Node.js ≥17.7/16.15,
-        // but older @types/node definitions do not include it in ExecFileSyncOptions.
-        const execFileOptions: Parameters<typeof execFileSync>[2] & { signal?: AbortSignal } = {
+        const stdout = execFileSync(this.runnerFile, allArgs, {
           cwd: this.cwd,
           encoding: "utf8",
           input: stdin,
           maxBuffer: Number.POSITIVE_INFINITY,
           windowsHide: true,
-          signal,
-        };
-        const stdout = execFileSync(
-          this.runnerFile,
-          allArgs,
-          execFileOptions as Parameters<typeof execFileSync>[2],
-        );
-        resolve(stdout as string);
+        });
+        resolve(stdout);
       } catch (e) {
         reject(e);
       }
