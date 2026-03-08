@@ -5,7 +5,6 @@
 [![Visual Studio Marketplace Rating Stars](https://img.shields.io/visual-studio-marketplace/stars/josevseb.google-java-format-for-vs-code.svg)](https://marketplace.visualstudio.com/items?itemName=josevseb.google-java-format-for-vs-code)
 [![Open VSX Registry](https://img.shields.io/open-vsx/v/josevseb/google-java-format-for-vs-code.svg)](https://open-vsx.org/extension/josevseb/google-java-format-for-vs-code)
 [![GitHub](https://img.shields.io/github/issues/JoseVSeb/google-java-format-for-vs-code.svg)](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues)
-[![release workflow](https://github.com/JoseVSeb/google-java-format-for-vs-code/actions/workflows/release.yaml/badge.svg)](https://github.com/JoseVSeb/google-java-format-for-vs-code/actions/workflows/release.yaml)
 [![codecov](https://codecov.io/gh/JoseVSeb/google-java-format-for-vs-code/branch/main/graph/badge.svg)](https://codecov.io/gh/JoseVSeb/google-java-format-for-vs-code)
 [![semantic-release: conventional commit](https://img.shields.io/badge/semantic--release-conventionalcommit-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
@@ -68,43 +67,53 @@ This extension contributes the following commands:
 To see exactly how the extension invokes the formatter, enable debug-level logs at
 runtime:
 
-1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run
-   **Developer: Set Log Level…**
-2. Select this extension (`google-java-format-for-vs-code`) from the list and
-   choose **Debug**.
-3. Open the **Output** panel (`View → Output`) and pick **Google Java Format For
-   VS Code** from the drop-down.  Every `fetch`, `execSync`, cache hit/miss, and
-   error will be printed there.
+1. Open the **Output** panel (`View → Output`) and pick **Google Java Format For
+   VS Code** from the drop-down.  This is the extension's dedicated log channel
+   where every `fetch`, `execSync`, cache hit/miss, and error is printed.
+2. To increase the log verbosity, open the Command Palette
+   (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run **Developer: Set Log Level…**.
+   > ⚠️ **Note:** this command sets the log level for the **entire VS Code
+   > application**, not just this extension — setting it to *Debug* or *Trace*
+   > will produce output from all extensions and internal VS Code services in
+   > every Output channel.  Reset it to *Info* (the default) afterwards to
+   > reduce noise.
+3. Select **Debug** (or **Trace** for maximum verbosity) and confirm.  The
+   extension's output channel will now show detailed diagnostic messages.
 
 ### Debug with breakpoints (Extension Development Host)
 
-VS Code extensions run inside the editor process itself and expose two lifecycle
-hooks that the runtime calls at well-defined moments:
+VS Code extensions run inside the editor's extension host process and expose two
+lifecycle hooks that the runtime calls at well-defined points:
 
 | Hook | When it runs |
 |------|-------------|
-| `activate(context)` | Called **once** the first time the extension is needed. This happens when VS Code opens a Java file or when a command contributed by this extension is invoked. All subscriptions — formatters, commands, and configuration listeners — are registered here. |
-| `deactivate()` | Called when the extension is disabled or VS Code is shutting down. Use it for cleanup that must run synchronously before the process exits. |
+| `activate(context)` | Called **once**, lazily, the first time the extension is needed — either when VS Code opens a Java file (matching the `activationEvents` in `package.json`) or when a command contributed by this extension is invoked. All subscriptions — document format providers, commands, and configuration-change listeners — are registered here. |
+| `deactivate()` | Called when the extension is explicitly disabled or when VS Code is shutting down. Use it for synchronous cleanup that must complete before the process exits. |
+
+> **Lazy activation explained:** VS Code does *not* start your extension at
+> editor launch.  `activate` is only called when an activation event fires
+> (e.g. a `.java` file is opened).  Until that happens the extension is
+> dormant — no code runs, no listeners are registered.
 
 To run the extension with breakpoints:
 
 1. **Open the repository** in VS Code (`File → Open Folder…`).
-2. Run **Terminal → Run Task… → npm: install** (or `yarn install`) to install
-   dependencies.
-3. Press **F5** (or run **Run → Start Debugging**).  VS Code launches a second
-   **Extension Development Host** window with your local build of the extension
-   loaded.
+2. Install dependencies: open a terminal and run `yarn install`.
+3. Press **F5** (or run **Run → Start Debugging**).  VS Code compiles the
+   extension and launches a second **Extension Development Host** window with
+   your local build loaded.
 4. In the *host* window, open or create a `.java` file and trigger formatting
-   (`Shift+Alt+F` on Windows/Linux, `Shift+Option+F` on macOS).  This activates
-   the extension (calls `activate`) if it isn't already active.
+   (`Shift+Alt+F` on Windows/Linux, `Shift+Option+F` on macOS).  Opening the
+   file fires the `onLanguage:java` activation event, which causes VS Code to
+   call `activate(context)` in your extension for the first time.
 5. Back in the *development* window, set breakpoints anywhere in `src/`.
-   Execution will pause at the next hit — including inside `activate`, the format
-   provider, or any command handler.
+   Execution will pause at the next hit — including inside `activate`, the
+   `provideDocumentRangeFormattingEdits` callback, or any command handler.
 
-> **Tip:** the extension is *lazy-activated* — `activate` only runs the first
-> time VS Code decides it is needed.  If your breakpoint in `activate` is never
-> hit, make sure you have a `.java` file open in the host window before
-> connecting the debugger.
+> **Tip:** if your breakpoint in `activate` is never hit, check that a `.java`
+> file is open in the host window *before* you press **F5**.  Alternatively,
+> run one of the extension's commands (e.g. **Reload Executable**) from the
+> host window's Command Palette — that also triggers activation.
 
 ---
 **Enjoy!**

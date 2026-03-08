@@ -1,12 +1,12 @@
 /** @type {import('semantic-release').GlobalConfig} */
 const config = {
-    // NOTE: "next" is intentionally NOT marked as `prerelease: true` here.
-    // semantic-release's `prerelease: true` generates pre-release semver tags
-    // (e.g. 1.2.0-next.1) which the VS Code Marketplace does NOT support —
-    // it requires a standard semver version string (e.g. 1.2.0).
+    // NOTE: "next" is a stable release branch for semantic-release — it is NOT
+    // marked as `prerelease: true` here because semantic-release's prerelease
+    // option generates pre-release semver tags (e.g. 1.2.0-next.1) which the
+    // VS Code Marketplace does NOT support (it requires plain semver like 1.2.0).
     // The marketplace pre-release flag is set separately via the VSCE_PRE_RELEASE
     // environment variable in release.yaml, which passes --pre-release to `vsce package`.
-    branches: ["main", { name: "next" }],
+    branches: ["main", "next"],
     plugins: [
         [
             "@semantic-release/commit-analyzer",
