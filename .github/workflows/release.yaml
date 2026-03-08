@@ -1,33 +1,74 @@
 name: Release
 
 on:
-    workflow_dispatch:
-    push:
-        branches:
-            - main
+  workflow_dispatch:
+  # Trigger only after the CI workflow completes successfully on main or next.
+  # This avoids duplicating test/lint steps here: the CI workflow is the single
+  # source of truth for quality gates.  The `branches` filter matches the
+  # head_branch of the triggering CI run; for pull-request-triggered CI runs
+  # the head_branch is the feature branch (not main/next), so those runs never
+  # start a release.  Only push-triggered CI runs on main or next do.
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main, next]
 
 jobs:
-    release:
-        permissions:
-            contents: write
-            issues: write
-            pull-requests: write
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+  release:
+    # For workflow_run events: only proceed if CI succeeded.
+    # For workflow_dispatch (manual trigger): always proceed.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # workflow_run events always run on the default branch; check out the
+          # branch that triggered CI so semantic-release sees the right HEAD.
+          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
+          fetch-depth: 0
 
-            - name: Install Node.js
-              uses: actions/setup-node@v3
-              with:
-                  node-version: 20
+      - name: Enable Corepack
+        run: corepack enable
 
-            - name: Install dependencies
-              run: npm ci
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
 
-            - name: Semantic Release
-              run: npx semantic-release
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  VSCE_PAT: ${{ secrets.VSCE_PAT }}
-                  OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Set release context
+        # workflow_run events always run on the default branch, so github.ref_name
+        # is always 'main'. Derive the actual branch from the triggering run's
+        # head_branch (empty for workflow_dispatch, use github.ref_name instead).
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          if [[ "${BRANCH}" == "next" ]]; then
+            echo "VSCE_PRE_RELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "VSCE_PRE_RELEASE=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Semantic Release
+        run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          # NOTE: VSCE_PRE_RELEASE controls the --pre-release flag passed to `vsce package`,
+          # marking the extension as a pre-release in the VS Code Marketplace when publishing
+          # from the `next` branch. This is intentionally separate from semantic-release's own
+          # `prerelease` branch option (which would produce pre-release semver tags like
+          # 1.2.0-next.1 that the VS Marketplace does not support). The version tag stays a
+          # stable semver string (e.g. 1.2.0) regardless of the branch.
+          # Value is set by the preceding "Set release context" step.
+          VSCE_PRE_RELEASE: ${{ env.VSCE_PRE_RELEASE }}

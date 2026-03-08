@@ -4,4 +4,7 @@ node_modules
 .vscode-test/
 *.vsix
 cache
+coverage
 *.env*
+.yarn/
+package-lock.json
