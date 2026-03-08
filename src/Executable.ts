@@ -46,7 +46,7 @@ export class Executable {
       try {
         // `signal` is supported by execFileSync at runtime in Node.js ≥17.7/16.15,
         // but older @types/node definitions do not include it in ExecFileSyncOptions.
-        const execOptions: Parameters<typeof execFileSync>[2] & { signal?: AbortSignal } = {
+        const execFileOptions: Parameters<typeof execFileSync>[2] & { signal?: AbortSignal } = {
           cwd: this.cwd,
           encoding: "utf8",
           input: stdin,
@@ -57,7 +57,7 @@ export class Executable {
         const stdout = execFileSync(
           this.runnerFile,
           allArgs,
-          execOptions as Parameters<typeof execFileSync>[2],
+          execFileOptions as Parameters<typeof execFileSync>[2],
         );
         resolve(stdout as string);
       } catch (e) {
