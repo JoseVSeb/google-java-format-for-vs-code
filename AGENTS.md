@@ -22,6 +22,22 @@ yarn compile-tests
 
 This runs `tsc` (TypeScript type-check of the full project including tests) followed by copying test fixtures. Fix any TypeScript errors it reports before committing.
 
+## Package Manager
+
+This project uses **yarn 1 (classic)** managed via [Corepack](https://nodejs.org/api/corepack.html). The pinned version is declared in the `packageManager` field of `package.json`.
+
+To install dependencies:
+
+```sh
+yarn install
+```
+
+In CI, use `--frozen-lockfile` to ensure the lock file is not updated:
+
+```sh
+yarn install --frozen-lockfile
+```
+
 ## Git Hooks
 
 [Lefthook](https://github.com/evilmartians/lefthook) is configured to run `biome check --write` on staged files automatically before every commit. The hook activates automatically after `yarn install` (via the `postinstall` script).

@@ -44,7 +44,7 @@ jobs:
           cache: yarn
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: yarn install --frozen-lockfile --ignore-engines
 
       - name: Set release context
         # workflow_run events always run on the default branch, so github.ref_name
