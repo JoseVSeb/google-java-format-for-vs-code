@@ -1,10 +1,11 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
+  # CI runs only on pull requests targeting main or next.
+  # Direct pushes to main and next are disallowed by branch-protection rules;
+  # the release pipeline (release.yaml) handles push-triggered automation.
   pull_request:
-    branches: [main]
+    branches: [main, next]
 
 jobs:
   # -----------------------------------------------------------------------

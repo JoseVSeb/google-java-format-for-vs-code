@@ -64,7 +64,48 @@ This extension contributes the following commands:
 
 ## How to Debug
 
-To debug this extension and see how exactly it invokes the formatter, use *Developer: Set Log Level...* to enable *Debug* for this extension, and then open the *Output* tab and select this extension.
+### Enable verbose logging (no code changes required)
+
+To see exactly how the extension invokes the formatter, enable debug-level logs at
+runtime:
+
+1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run
+   **Developer: Set Log Level…**
+2. Select this extension (`google-java-format-for-vs-code`) from the list and
+   choose **Debug**.
+3. Open the **Output** panel (`View → Output`) and pick **Google Java Format For
+   VS Code** from the drop-down.  Every `fetch`, `execSync`, cache hit/miss, and
+   error will be printed there.
+
+### Debug with breakpoints (Extension Development Host)
+
+VS Code extensions run inside the editor process itself and expose two lifecycle
+hooks that the runtime calls at well-defined moments:
+
+| Hook | When it runs |
+|------|-------------|
+| `activate(context)` | Called **once** the first time the extension is needed. This happens when VS Code opens a Java file or when a command contributed by this extension is invoked. All subscriptions — formatters, commands, and configuration listeners — are registered here. |
+| `deactivate()` | Called when the extension is disabled or VS Code is shutting down. Use it for cleanup that must run synchronously before the process exits. |
+
+To run the extension with breakpoints:
+
+1. **Open the repository** in VS Code (`File → Open Folder…`).
+2. Run **Terminal → Run Task… → npm: install** (or `yarn install`) to install
+   dependencies.
+3. Press **F5** (or run **Run → Start Debugging**).  VS Code launches a second
+   **Extension Development Host** window with your local build of the extension
+   loaded.
+4. In the *host* window, open or create a `.java` file and trigger formatting
+   (`Shift+Alt+F` on Windows/Linux, `Shift+Option+F` on macOS).  This activates
+   the extension (calls `activate`) if it isn't already active.
+5. Back in the *development* window, set breakpoints anywhere in `src/`.
+   Execution will pause at the next hit — including inside `activate`, the format
+   provider, or any command handler.
+
+> **Tip:** the extension is *lazy-activated* — `activate` only runs the first
+> time VS Code decides it is needed.  If your breakpoint in `activate` is never
+> hit, make sure you have a `.java` file open in the host window before
+> connecting the debugger.
 
 ---
 **Enjoy!**
