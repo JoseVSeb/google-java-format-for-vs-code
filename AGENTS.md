@@ -36,7 +36,7 @@ The hook is defined in `lefthook.yml` at the repository root.
 
 | Task | Command |
 |---|---|
-| Compile (webpack) | `yarn compile` |
+| Compile (esbuild) | `yarn compile` |
 | TypeScript type check | `yarn compile-tests` |
 | Run tests | `yarn test:ci` |
 | Lint only | `yarn lint` |
