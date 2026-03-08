@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
+import { throttle } from "lodash-es";
 import type { ExtensionContext, LogOutputChannel } from "vscode";
 import { commands, ProgressLocation, window } from "vscode";
 import type { Cache } from "./Cache";
@@ -7,11 +8,14 @@ import type { ExtensionConfiguration } from "./ExtensionConfiguration";
 import type { GoogleJavaFormatService } from "./GoogleJavaFormatService";
 import { logAsyncMethod } from "./logDecorator";
 
+type ThrottledLoad = ReturnType<typeof throttle<() => Promise<void>>>;
+
 export class Executable {
   private runnerFile: string = null!;
   private runnerArgs: string[] = null!;
   private cwd: string = null!;
   private loadPromise: Promise<void> = Promise.resolve();
+  private readonly loadThrottled: ThrottledLoad;
 
   private constructor(
     private context: ExtensionContext,
@@ -24,6 +28,10 @@ export class Executable {
     this.load = this.load.bind(this);
     this.startLoad = this.startLoad.bind(this);
     this.configurationChangeListener = this.configurationChangeListener.bind(this);
+    // Throttle load() so that rapid-fire calls (e.g. multiple config-change
+    // events) are coalesced: the first call executes immediately and any calls
+    // within the 500 ms window share the same in-flight promise.
+    this.loadThrottled = throttle(this.load, 500);
   }
 
   public static getInstance(
@@ -71,12 +79,19 @@ export class Executable {
   }
 
   private startLoad(): void {
-    this.loadPromise = this.load();
-    // Attach a no-op handler so that a rejection before the first format attempt
-    // does not produce an "unhandledRejection" warning.  Errors are already
-    // logged by the @logAsyncMethod decorator on load(), and any awaiter of
-    // run() will still observe the rejection through this.loadPromise.
-    this.loadPromise.catch(() => {});
+    const p = this.loadThrottled();
+    // loadThrottled() returns undefined when the call is suppressed by the
+    // throttle window (i.e., a load is already in-flight or was just started).
+    // In that case, keep the existing loadPromise so awaiters observe the
+    // outcome of the current load rather than a stale resolved promise.
+    if (p !== undefined) {
+      this.loadPromise = p;
+      // Attach a no-op handler so that a rejection before the first format
+      // attempt does not produce an "unhandledRejection" warning.  Errors are
+      // already logged by the @logAsyncMethod decorator on load(), and any
+      // awaiter of run() will still observe the rejection through loadPromise.
+      this.loadPromise.catch(() => {});
+    }
   }
 
   @logAsyncMethod
@@ -131,7 +146,7 @@ export class Executable {
     }
 
     this.log.debug("Updating executable...");
-    window.withProgress(
+    await window.withProgress(
       {
         location: ProgressLocation.Notification,
         title: "Updating executable...",
