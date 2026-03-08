@@ -9,7 +9,9 @@ export default class GoogleJavaFormatterSync implements IGoogleJavaFormatter {
     private executable: Executable,
     private config: ExtensionConfiguration,
     readonly log: LogOutputChannel,
-  ) {}
+  ) {
+    this.format = this.format.bind(this);
+  }
 
   @logAsyncMethod
   async format(text: string, range?: [number, number], signal?: AbortSignal): Promise<string> {

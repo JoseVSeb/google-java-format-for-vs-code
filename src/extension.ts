@@ -5,6 +5,7 @@ import { Executable } from "./Executable";
 import { ExtensionConfiguration } from "./ExtensionConfiguration";
 import GoogleJavaFormatEditProvider from "./GoogleJavaFormatEditProvider";
 import GoogleJavaFormatEditService from "./GoogleJavaFormatEditService";
+import { GoogleJavaFormatService } from "./GoogleJavaFormatService";
 import GoogleJavaFormatterSync from "./GoogleJavaFormatterSync";
 
 export async function activate(context: ExtensionContext) {
@@ -19,7 +20,9 @@ export async function activate(context: ExtensionContext) {
   const cache = await Cache.getInstance(context, log);
   cache.subscribe();
 
-  const executable = await Executable.getInstance(context, config, cache, log);
+  const service = new GoogleJavaFormatService(log);
+
+  const executable = await Executable.getInstance(context, config, cache, service, log);
   executable.subscribe();
 
   const formatter = new GoogleJavaFormatterSync(executable, config, log);

@@ -22,13 +22,7 @@ This runs `tsc` (TypeScript type-check of the full project including tests) foll
 
 ## Git Hooks
 
-[Lefthook](https://github.com/evilmartians/lefthook) is configured to run `biome check --write` on staged files automatically before every commit.
-
-To activate the hooks after cloning or after installing dependencies, run:
-
-```sh
-npx lefthook install
-```
+[Lefthook](https://github.com/evilmartians/lefthook) is configured to run `biome check --write` on staged files automatically before every commit. The hook activates automatically after `yarn install` (via the `postinstall` script).
 
 The hook is defined in `lefthook.yml` at the repository root.
 

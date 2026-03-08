@@ -16,7 +16,12 @@ export default class GoogleJavaFormatEditProvider
   constructor(
     private formatter: IGoogleJavaFormatter,
     readonly log: LogOutputChannel,
-  ) {}
+  ) {
+    this.formatText = this.formatText.bind(this);
+    this.errorHandler = this.errorHandler.bind(this);
+    this.provideDocumentRangeFormattingEdits = this.provideDocumentRangeFormattingEdits.bind(this);
+    this.provideDocumentFormattingEdits = this.provideDocumentFormattingEdits.bind(this);
+  }
 
   @logAsyncMethod
   private async formatText(text: string, range: Range, token: CancellationToken): Promise<string> {

@@ -5,7 +5,7 @@ const SECTION = `java.format.settings.google`;
 
 export type GoogleJavaFormatVersion = `${number}.${number}.${number}` | "latest";
 
-export type GoogleJavaFormatMode = "jar-file" | "native-binary";
+export type GoogleJavaFormatMode = "jar-file" | "native-binary"; // TODO: | "background-service" — future scope
 
 export interface GoogleJavaFormatConfiguration {
   executable?: string;
@@ -22,12 +22,14 @@ export class ExtensionConfiguration implements GoogleJavaFormatConfiguration {
   readonly subscriptions: ((config: GoogleJavaFormatConfiguration) => void)[] = [];
 
   constructor(private context: ExtensionContext) {
+    this.load = this.load.bind(this);
+    this.configurationChangeListener = this.configurationChangeListener.bind(this);
     this.load();
   }
 
   subscribe() {
     this.context.subscriptions.push(
-      workspace.onDidChangeConfiguration(this.configurationChangeListener.bind(this)),
+      workspace.onDidChangeConfiguration(this.configurationChangeListener),
     );
   }
 

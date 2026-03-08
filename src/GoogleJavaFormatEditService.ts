@@ -14,7 +14,9 @@ export default class GoogleJavaFormatEditService {
     private editProvider: DocumentRangeFormattingEditProvider,
     private context: ExtensionContext,
     readonly log: LogOutputChannel,
-  ) {}
+  ) {
+    this.subscribe = this.subscribe.bind(this);
+  }
 
   @logMethod
   subscribe() {

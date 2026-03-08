@@ -15,6 +15,8 @@ export class Cache {
     cacheFolder: string,
   ) {
     this.uri = Uri.joinPath(context.extensionUri, cacheFolder);
+    this.clear = this.clear.bind(this);
+    this.get = this.get.bind(this);
   }
 
   public static async getInstance(
@@ -29,7 +31,7 @@ export class Cache {
 
   subscribe() {
     this.context.subscriptions.push(
-      commands.registerCommand("googleJavaFormatForVSCode.clearCache", this.clear.bind(this)),
+      commands.registerCommand("googleJavaFormatForVSCode.clearCache", this.clear),
     );
   }
 
