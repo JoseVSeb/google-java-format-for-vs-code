@@ -63,7 +63,10 @@ export class Executable {
   subscribe() {
     this.config.subscriptions.push(this.configurationChangeListener);
     this.context.subscriptions.push(
-      commands.registerCommand("googleJavaFormatForVSCode.reloadExecutable", this.startLoad),
+      commands.registerCommand("googleJavaFormatForVSCode.reloadExecutable", () => {
+        this.startLoad();
+        return this.loadPromise;
+      }),
     );
   }
 
