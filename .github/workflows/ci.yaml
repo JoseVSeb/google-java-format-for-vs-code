@@ -1,9 +1,14 @@
 name: CI
 
 on:
-  # CI runs only on pull requests targeting main or next.
-  # Direct pushes to main and next are disallowed by branch-protection rules;
-  # the release pipeline (release.yaml) handles push-triggered automation.
+  # CI runs on both pull requests and direct pushes to main/next.
+  # Running on push ensures coverage reports are uploaded for each merged
+  # commit, giving Codecov accurate per-branch data.  Direct pushes are
+  # disallowed by branch-protection rules (only PRs land here in practice).
+  # The release workflow (release.yaml) uses workflow_run to fire only after
+  # this CI workflow succeeds on a push — no test steps are duplicated there.
+  push:
+    branches: [main, next]
   pull_request:
     branches: [main, next]
 
