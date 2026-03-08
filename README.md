@@ -113,10 +113,5 @@ To run the extension with breakpoints:
 6. Trigger formatting (`Shift+Alt+F` on Windows/Linux, `Shift+Option+F` on
    macOS) to hit breakpoints inside the formatting callbacks.
 
-> **Tip:** if your breakpoint in `activate` is never hit, run one of the
-> extension's commands (e.g. **Reload Executable**) from the host window's
-> Command Palette — that also triggers activation without needing a `.java`
-> file open.
-
 ---
 **Enjoy!**
