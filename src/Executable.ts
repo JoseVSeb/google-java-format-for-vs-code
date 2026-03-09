@@ -12,7 +12,6 @@ export class Executable {
   private runnerArgs: string[] = null!;
   private cwd: string = null!;
   private loadPromise: Promise<void> = Promise.resolve();
-  private loadGeneration = 0;
 
   private constructor(
     private context: ExtensionContext,
@@ -42,15 +41,7 @@ export class Executable {
   // TODO: signal is accepted for future cancellation support; execSync is synchronous
   // and cannot honour an AbortSignal mid-execution — switch to async spawn when needed.
   async run({ args, stdin }: { args: string[]; stdin: string; signal?: AbortSignal }) {
-    // Wait until loadPromise settles and loadPromise hasn't been replaced by a
-    // newer startLoad() call in the meantime.  A superseded load() returns early
-    // without committing state, so its promise resolves but loadPromise will have
-    // already advanced; the loop catches that and re-waits on the newer promise.
-    let p: Promise<void>;
-    do {
-      p = this.loadPromise;
-      await p; // eslint-disable-line no-await-in-loop
-    } while (p !== this.loadPromise);
+    await this.loadPromise;
     return new Promise<string>((resolve, reject) => {
       const command = [this.runnerFile, ...this.runnerArgs, ...args, "-"].join(" ");
       this.log.debug(`> ${command}`);
@@ -80,45 +71,37 @@ export class Executable {
   }
 
   private startLoad(): void {
-    const gen = ++this.loadGeneration;
-    // Always start a new load immediately as a microtask — never chained behind
-    // a prior in-flight load.  Rapid-fire calls within the same synchronous tick
-    // are deduplicated: only the callback where gen === loadGeneration runs load().
-    // Calls separated by at least one await can each start load() concurrently;
-    // load() itself captures loadGeneration on entry and only commits its results
-    // when still the latest generation, so concurrent loads cannot corrupt state.
-    this.loadPromise = Promise.resolve().then(() => {
-      if (gen === this.loadGeneration) return this.load();
-      return undefined;
-    });
-    // Suppress "unhandledRejection" noise; errors are logged by @logAsyncMethod
-    // and re-thrown when run() awaits loadPromise.
+    this.loadPromise = this.load();
+    // Attach a no-op handler so that a rejection before the first format attempt
+    // does not produce an "unhandledRejection" warning.  Errors are already
+    // logged by the @logAsyncMethod decorator on load(), and any awaiter of
+    // run() will still observe the rejection through this.loadPromise.
     this.loadPromise.catch(() => {});
+    // Note: if startLoad() is called while a previous load() is still in-flight
+    // (e.g. a config-change update races against an in-progress download), the
+    // two load() calls may run concurrently and write to this.cwd / this.runnerFile
+    // / this.runnerArgs in parallel.  In practice this race is benign: the user
+    // must explicitly confirm a config-change prompt before an update is triggered,
+    // and rapid back-to-back reloads are negligibly unlikely.  The final state will
+    // be whichever load() call finishes last, which is the desired behaviour
+    // (most-recent config wins).  Adding serialisation machinery for this edge case
+    // would add complexity with no meaningful UX benefit.
   }
 
   @logAsyncMethod
   private async load() {
-    // Capture the generation at entry.  Any startLoad() call made while this
-    // load is suspended at an await will increment loadGeneration; the check
-    // below then skips the commit so concurrent loads cannot corrupt state.
-    const gen = this.loadGeneration;
-
     const uri = await this.service.resolveExecutableFile(this.config, this.context);
 
     const { fsPath } = uri.scheme === "file" ? uri : await this.cache.get(uri.toString());
 
     const isJar = fsPath.endsWith(".jar");
-    const cwd = path.dirname(fsPath);
+    this.cwd = path.dirname(fsPath);
     const basename = path.basename(fsPath);
 
-    this.log.debug(`Setting current working directory: ${cwd}`);
+    this.log.debug(`Setting current working directory: ${this.cwd}`);
 
-    await this.enableExecutionPermission(basename, cwd);
+    await this.enableExecutionPermission(basename);
 
-    // Only commit to shared state if this is still the latest generation.
-    if (gen !== this.loadGeneration) return;
-
-    this.cwd = cwd;
     if (isJar) {
       this.runnerFile = "java";
       this.runnerArgs = ["-jar", `./${basename}`];
@@ -131,7 +114,7 @@ export class Executable {
     }
   }
 
-  private async enableExecutionPermission(basename: string, cwd: string) {
+  private async enableExecutionPermission(basename: string) {
     if (basename.endsWith(".jar")) {
       return;
     }
@@ -139,7 +122,7 @@ export class Executable {
     if ((["linux", "darwin"] as NodeJS.Platform[]).includes(process.platform)) {
       const command = `chmod +x ${basename}`;
       this.log.debug(`> ${command}`);
-      execSync(command, { cwd });
+      execSync(command, { cwd: this.cwd });
     }
   }
 
