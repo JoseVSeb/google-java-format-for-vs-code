@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { ExtensionContext, LogOutputChannel } from "vscode";
 import { commands, Uri, workspace } from "vscode";
-import { logAsyncMethod } from "./logDecorator";
+import { logAsyncMethod, logMethod } from "./logDecorator";
 
 export class Cache {
   private uri: Uri;
@@ -27,6 +27,7 @@ export class Cache {
     return cache;
   }
 
+  @logMethod
   subscribe() {
     this.context.subscriptions.push(
       commands.registerCommand("googleJavaFormatForVSCode.clearCache", this.clear),
@@ -40,6 +41,7 @@ export class Cache {
     await commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
   }
 
+  @logAsyncMethod
   private async init() {
     try {
       await workspace.fs.createDirectory(this.uri);

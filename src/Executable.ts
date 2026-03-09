@@ -5,7 +5,7 @@ import { commands, ProgressLocation, window } from "vscode";
 import type { Cache } from "./Cache";
 import type { ExtensionConfiguration } from "./ExtensionConfiguration";
 import type { GoogleJavaFormatService } from "./GoogleJavaFormatService";
-import { logAsyncMethod } from "./logDecorator";
+import { logAsyncMethod, logMethod } from "./logDecorator";
 
 type RunnerConfig = {
   cwd: string;
@@ -49,6 +49,7 @@ export class Executable {
 
   // TODO: signal is accepted for future cancellation support; execSync is synchronous
   // and cannot honour an AbortSignal mid-execution — switch to async spawn when needed.
+  @logAsyncMethod
   async run({ args, stdin }: { args: string[]; stdin: string; signal?: AbortSignal }) {
     const { cwd, runnerFile, runnerArgs } = await this.loadPromise;
     return new Promise<string>((resolve, reject) => {
@@ -69,6 +70,7 @@ export class Executable {
     });
   }
 
+  @logMethod
   subscribe() {
     this.config.subscriptions.push(this.configurationChangeListener);
     this.context.subscriptions.push(
@@ -79,6 +81,7 @@ export class Executable {
     );
   }
 
+  @logMethod
   private startLoad(): void {
     this.loadPromise = this.load();
     // Attach a no-op handler so that a rejection before the first format attempt
@@ -118,6 +121,7 @@ export class Executable {
     return { cwd, runnerFile, runnerArgs };
   }
 
+  @logAsyncMethod
   private async enableExecutionPermission(cwd: string, basename: string) {
     if (basename.endsWith(".jar")) {
       return;
@@ -130,6 +134,7 @@ export class Executable {
     }
   }
 
+  @logAsyncMethod
   private async configurationChangeListener() {
     this.log.info("Configuration change detected.");
     const action = await window.showInformationMessage(

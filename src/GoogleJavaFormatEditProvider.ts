@@ -8,7 +8,7 @@ import type {
 } from "vscode";
 import { Range, TextEdit, window } from "vscode";
 import type { IGoogleJavaFormatter } from "./IGoogleJavaFormatter";
-import { logAsyncMethod } from "./logDecorator";
+import { logAsyncMethod, logMethod } from "./logDecorator";
 
 export default class GoogleJavaFormatEditProvider
   implements DocumentRangeFormattingEditProvider, DocumentFormattingEditProvider
@@ -42,6 +42,7 @@ export default class GoogleJavaFormatEditProvider
     return result;
   }
 
+  @logMethod
   private errorHandler(error: unknown): TextEdit[] {
     const message =
       (error as Error)?.message ?? "Failed to format java code using Google Java Format";
@@ -52,6 +53,7 @@ export default class GoogleJavaFormatEditProvider
     return [];
   }
 
+  @logAsyncMethod
   async provideDocumentRangeFormattingEdits(
     document: TextDocument,
     range: Range,
@@ -68,6 +70,7 @@ export default class GoogleJavaFormatEditProvider
     }
   }
 
+  @logAsyncMethod
   async provideDocumentFormattingEdits(
     document: TextDocument,
     options: FormattingOptions,
