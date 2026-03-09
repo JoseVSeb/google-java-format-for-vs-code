@@ -7,11 +7,20 @@ import type { ExtensionConfiguration } from "./ExtensionConfiguration";
 import type { GoogleJavaFormatService } from "./GoogleJavaFormatService";
 import { logAsyncMethod } from "./logDecorator";
 
+type RunnerConfig = {
+  cwd: string;
+  runnerFile: string;
+  runnerArgs: string[];
+};
+
 export class Executable {
-  private runnerFile: string = null!;
-  private runnerArgs: string[] = null!;
-  private cwd: string = null!;
-  private loadPromise: Promise<void> = Promise.resolve();
+  // loadPromise carries the resolved RunnerConfig so that run() reads a
+  // self-consistent snapshot from whichever load() call it awaits.  This means
+  // load() uses only local variables (no shared-field writes across awaits), and
+  // concurrent / overlapping calls cannot corrupt each other's state.
+  // The `!` is safe because getInstance() always calls startLoad() before
+  // returning, guaranteeing loadPromise is assigned before run() can be invoked.
+  private loadPromise!: Promise<RunnerConfig>;
 
   private constructor(
     private context: ExtensionContext,
@@ -41,13 +50,13 @@ export class Executable {
   // TODO: signal is accepted for future cancellation support; execSync is synchronous
   // and cannot honour an AbortSignal mid-execution — switch to async spawn when needed.
   async run({ args, stdin }: { args: string[]; stdin: string; signal?: AbortSignal }) {
-    await this.loadPromise;
+    const { cwd, runnerFile, runnerArgs } = await this.loadPromise;
     return new Promise<string>((resolve, reject) => {
-      const command = [this.runnerFile, ...this.runnerArgs, ...args, "-"].join(" ");
+      const command = [runnerFile, ...runnerArgs, ...args, "-"].join(" ");
       this.log.debug(`> ${command}`);
       try {
         const stdout = execSync(command, {
-          cwd: this.cwd,
+          cwd,
           encoding: "utf8",
           input: stdin,
           maxBuffer: Number.POSITIVE_INFINITY,
@@ -77,44 +86,39 @@ export class Executable {
     // logged by the @logAsyncMethod decorator on load(), and any awaiter of
     // run() will still observe the rejection through this.loadPromise.
     this.loadPromise.catch(() => {});
-    // Note: if startLoad() is called while a previous load() is still in-flight
-    // (e.g. a config-change update races against an in-progress download), the
-    // two load() calls may run concurrently and write to this.cwd / this.runnerFile
-    // / this.runnerArgs in parallel.  In practice this race is benign: the user
-    // must explicitly confirm a config-change prompt before an update is triggered,
-    // and rapid back-to-back reloads are negligibly unlikely.  The final state will
-    // be whichever load() call finishes last, which is the desired behaviour
-    // (most-recent config wins).  Adding serialisation machinery for this edge case
-    // would add complexity with no meaningful UX benefit.
   }
 
   @logAsyncMethod
-  private async load() {
+  private async load(): Promise<RunnerConfig> {
     const uri = await this.service.resolveExecutableFile(this.config, this.context);
 
     const { fsPath } = uri.scheme === "file" ? uri : await this.cache.get(uri.toString());
 
     const isJar = fsPath.endsWith(".jar");
-    this.cwd = path.dirname(fsPath);
+    const cwd = path.dirname(fsPath);
     const basename = path.basename(fsPath);
 
-    this.log.debug(`Setting current working directory: ${this.cwd}`);
+    this.log.debug(`Setting current working directory: ${cwd}`);
 
-    await this.enableExecutionPermission(basename);
+    await this.enableExecutionPermission(cwd, basename);
 
+    let runnerFile: string;
+    let runnerArgs: string[];
     if (isJar) {
-      this.runnerFile = "java";
-      this.runnerArgs = ["-jar", `./${basename}`];
+      runnerFile = "java";
+      runnerArgs = ["-jar", `./${basename}`];
     } else if (process.platform === "win32") {
-      this.runnerFile = basename;
-      this.runnerArgs = [];
+      runnerFile = basename;
+      runnerArgs = [];
     } else {
-      this.runnerFile = `./${basename}`;
-      this.runnerArgs = [];
+      runnerFile = `./${basename}`;
+      runnerArgs = [];
     }
+
+    return { cwd, runnerFile, runnerArgs };
   }
 
-  private async enableExecutionPermission(basename: string) {
+  private async enableExecutionPermission(cwd: string, basename: string) {
     if (basename.endsWith(".jar")) {
       return;
     }
@@ -122,7 +126,7 @@ export class Executable {
     if ((["linux", "darwin"] as NodeJS.Platform[]).includes(process.platform)) {
       const command = `chmod +x ${basename}`;
       this.log.debug(`> ${command}`);
-      execSync(command, { cwd: this.cwd });
+      execSync(command, { cwd });
     }
   }
 
