@@ -144,16 +144,18 @@ export class Executable {
     }
 
     this.log.debug("Updating executable...");
-    await window.withProgress(
-      {
-        location: ProgressLocation.Notification,
-        title: "Updating executable...",
-        cancellable: false,
-      },
-      () => {
-        this.startLoad();
-        return this.loadPromise;
-      },
-    );
+    window
+      .withProgress(
+        {
+          location: ProgressLocation.Notification,
+          title: "Updating executable...",
+          cancellable: false,
+        },
+        () => {
+          this.startLoad();
+          return this.loadPromise;
+        },
+      )
+      .then(undefined, (err: unknown) => this.log.error(`Failed to update executable: ${err}`));
   }
 }
