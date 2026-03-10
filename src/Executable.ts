@@ -155,22 +155,20 @@ export class Executable {
     }
 
     this.log.debug("Updating executable...");
-    window
-      .withProgress(
-        {
-          location: ProgressLocation.Notification,
-          title: "Updating executable...",
-          cancellable: false,
-        },
-        () => {
-          this.startLoad();
-          return this.loadPromise;
-        },
-      )
-      .then(undefined, (err: unknown) => {
-        const message = `Google Java Format: Failed to update executable. ${err instanceof Error ? err.message : String(err)}`;
-        this.log.error(message);
-        void window.showErrorMessage(message);
-      });
+    window.withProgress(
+      {
+        location: ProgressLocation.Notification,
+        title: "Updating executable...",
+        cancellable: false,
+      },
+      () => {
+        this.startLoad();
+        return this.loadPromise.catch((err: unknown) => {
+          const message = `Google Java Format: Failed to update executable. ${err instanceof Error ? err.message : String(err)}`;
+          this.log.error(message);
+          void window.showErrorMessage(message);
+        });
+      },
+    );
   }
 }
