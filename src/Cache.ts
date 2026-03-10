@@ -1,15 +1,12 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
+import throttle from "lodash-es/throttle";
 import type { ExtensionContext, LogOutputChannel } from "vscode";
 import { commands, Uri, window, workspace } from "vscode";
 import { logAsyncMethod, logMethod } from "./logDecorator";
 
 export class Cache {
   private uri: Uri;
-  // Tracks in-flight downloads keyed by URL. Concurrent calls for the same URL
-  // join the existing Promise instead of starting a parallel download and racing
-  // to write the same cached file. Each entry is removed on completion or error.
-  private readonly downloadInFlight = new Map<string, Promise<Uri>>();
 
   private constructor(
     private context: ExtensionContext,
@@ -18,6 +15,14 @@ export class Cache {
   ) {
     this.uri = Uri.joinPath(context.extensionUri, cacheFolder);
     this.clear = this.clear.bind(this);
+    // Throttle `get` so that rapid or concurrent calls for the same URL share
+    // the in-flight download instead of racing to write the same cached file.
+    // Uses lodash defaults: leading=true, trailing=true — the first call fires
+    // immediately and any call within the 2 s window queues a trailing call.
+    // Note: the throttle is global (not keyed per URL). In practice the
+    // extension resolves only one executable URL per load cycle, so two
+    // different URLs will not arrive within the same window.
+    this.get = throttle(this.get.bind(this), 2000) as typeof this.get;
   }
 
   public static async getInstance(
@@ -70,41 +75,25 @@ export class Cache {
       this.log.info(`Using cached file at ${localPath.toString()}`);
       return localPath;
     } catch (_statError) {
-      // File not in cache. Join an existing in-flight download for this URL
-      // (if any) so two concurrent loads for the same artifact don't race to
-      // write the same cached file. Unlike a time-based global throttle, this
-      // Map is keyed per-URL, so a different URL (e.g. a 404 test URL) is
-      // always fetched independently.
-      const existing = this.downloadInFlight.get(url);
-      if (existing) {
-        this.log.debug(`Joining in-flight download for ${url}`);
-        return existing;
+      try {
+        await workspace.fs.createDirectory(dirname);
+        this.log.debug(`Cache directory created at ${dirname.toString()}`);
+      } catch (mkdirError) {
+        this.log.error(`Failed to create cache directory: ${mkdirError}`);
+        throw mkdirError;
       }
 
-      const doDownload = async (): Promise<Uri> => {
-        try {
-          await workspace.fs.createDirectory(dirname);
-          this.log.debug(`Cache directory created at ${dirname.toString()}`);
-        } catch (mkdirError) {
-          this.log.error(`Failed to create cache directory: ${mkdirError}`);
-          throw mkdirError;
-        }
-
-        this.log.info(`Downloading file from ${url}`);
-        const response = await fetch(url);
-        if (response.ok) {
-          const buffer = await response.arrayBuffer();
-          await workspace.fs.writeFile(localPath, new Uint8Array(buffer));
-          this.log.info(`File saved to ${localPath.toString()}`);
-          return localPath;
-        }
-        throw new Error(
-          `Failed to download file from ${url}: ${response.status} ${response.statusText}`,
-        );
-      };
-      const download = doDownload().finally(() => this.downloadInFlight.delete(url));
-      this.downloadInFlight.set(url, download);
-      return download;
+      this.log.info(`Downloading file from ${url}`);
+      const response = await fetch(url);
+      if (response.ok) {
+        const buffer = await response.arrayBuffer();
+        await workspace.fs.writeFile(localPath, new Uint8Array(buffer));
+        this.log.info(`File saved to ${localPath.toString()}`);
+        return localPath;
+      }
+      throw new Error(
+        `Failed to download file from ${url}: ${response.status} ${response.statusText}`,
+      );
     }
   }
 }

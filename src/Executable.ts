@@ -76,7 +76,14 @@ export class Executable {
     this.context.subscriptions.push(
       commands.registerCommand("googleJavaFormatForVSCode.reloadExecutable", () => {
         this.startLoad();
-        return this.loadPromise;
+        // loadPromise may reject (e.g. bad version or unreachable URL).
+        // Catch the rejection here to show an error notification instead of
+        // propagating it to the VS Code command infrastructure as an unhandled
+        // rejection. The error is already logged by @logAsyncMethod on load().
+        return this.loadPromise.catch((err: unknown) => {
+          const message = `Google Java Format: Failed to reload executable. ${err instanceof Error ? err.message : String(err)}`;
+          void window.showErrorMessage(message);
+        });
       }),
     );
   }
