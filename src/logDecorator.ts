@@ -81,18 +81,14 @@ export function logMethod(
   const original = descriptor.value as (this: WithLog, ...args: unknown[]) => unknown;
 
   descriptor.value = function (this: WithLog, ...args: unknown[]) {
-    if (this.log.logLevel !== LogLevel.Trace) {
-      try {
-        return original.apply(this, args);
-      } catch (error) {
-        this.log.error(`Error in ${qualifiedName}`, error as Error);
-        throw error;
-      }
+    if (this.log.logLevel === LogLevel.Trace) {
+      this.log.trace(`${qualifiedName} called with: ${serializeArgs(args)}`);
     }
-    this.log.trace(`${qualifiedName} called with: ${serializeArgs(args)}`);
     try {
       const result = original.apply(this, args);
-      this.log.trace(`${qualifiedName} returned: ${serializeResult(result)}`);
+      if (this.log.logLevel === LogLevel.Trace) {
+        this.log.trace(`${qualifiedName} returned: ${serializeResult(result)}`);
+      }
       return result;
     } catch (error) {
       this.log.error(`Error in ${qualifiedName}`, error as Error);
@@ -120,18 +116,14 @@ export function logAsyncMethod(
   const original = descriptor.value as (this: WithLog, ...args: unknown[]) => Promise<unknown>;
 
   descriptor.value = async function (this: WithLog, ...args: unknown[]) {
-    if (this.log.logLevel !== LogLevel.Trace) {
-      try {
-        return await original.apply(this, args);
-      } catch (error) {
-        this.log.error(`Error in ${qualifiedName}`, error as Error);
-        throw error;
-      }
+    if (this.log.logLevel === LogLevel.Trace) {
+      this.log.trace(`${qualifiedName} called with: ${serializeArgs(args)}`);
     }
-    this.log.trace(`${qualifiedName} called with: ${serializeArgs(args)}`);
     try {
       const result = await original.apply(this, args);
-      this.log.trace(`${qualifiedName} returned: ${serializeResult(result)}`);
+      if (this.log.logLevel === LogLevel.Trace) {
+        this.log.trace(`${qualifiedName} returned: ${serializeResult(result)}`);
+      }
       return result;
     } catch (error) {
       this.log.error(`Error in ${qualifiedName}`, error as Error);
