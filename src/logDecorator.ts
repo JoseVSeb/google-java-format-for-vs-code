@@ -9,37 +9,24 @@ interface WithLog {
   readonly log: LogOutputChannel;
 }
 
+const MULTILINE_PREVIEW_CHARS = 40;
+
 /**
  * JSON.stringify replacer applied to decorator argument and return-value logging.
  *
- * - **Multiline strings** (likely source file content): truncated to a one-line
- *   preview of ≤60 chars followed by "…" so that large document buffers do not
- *   flood the output channel.
- * - **Absolute file-system paths** and **file:// URIs**: redacted to only the
- *   last path component (`<.../filename>`), hiding directory structure that may
- *   expose the user's file system layout.
+ * - **Multiline strings** (likely source file content): truncated to show the
+ *   first and last {@link MULTILINE_PREVIEW_CHARS} characters separated by
+ *   `"..."` so that large document buffers do not flood the output channel.
  * - **Map / Set**: serialised as `{ __type__: "Map", entries: [...] }` /
  *   `{ __type__: "Set", values: [...] }` because the default JSON.stringify
  *   reduces both to `{}`.
  */
 function logReplacer(_key: string, value: unknown): unknown {
-  if (typeof value === "string") {
-    // Source-file content or any other multi-line string — show a short preview.
-    if (value.includes("\n")) {
-      const preview = value.slice(0, 60).replace(/\n/g, "↵");
-      return `${preview}…`;
-    }
-    // Absolute file-system paths (Unix / Windows) and file:// URIs — show only
-    // the last path component so directory structure is not exposed.
-    if (/^(?:[A-Za-z]:[/\\]|\/)/.test(value) || value.startsWith("file://")) {
-      const filename =
-        value
-          .replace(/[/\\]+$/, "")
-          .split(/[/\\]/)
-          .pop() ?? value;
-      return `<.../${filename}>`;
-    }
-    return value;
+  if (typeof value === "string" && value.includes("\n")) {
+    // Short multiline strings (headers, small configs) are shown in full;
+    // long ones (source file content) are trimmed to start…end.
+    if (value.length <= MULTILINE_PREVIEW_CHARS * 2) return value;
+    return `${value.slice(0, MULTILINE_PREVIEW_CHARS)}...${value.slice(-MULTILINE_PREVIEW_CHARS)}`;
   }
   if (value instanceof Map) {
     return { __type__: "Map", entries: [...value.entries()] };
@@ -94,14 +81,18 @@ export function logMethod(
   const original = descriptor.value as (this: WithLog, ...args: unknown[]) => unknown;
 
   descriptor.value = function (this: WithLog, ...args: unknown[]) {
-    if (this.log.logLevel === LogLevel.Trace) {
-      this.log.trace(`${qualifiedName} called with: ${serializeArgs(args)}`);
+    if (this.log.logLevel !== LogLevel.Trace) {
+      try {
+        return original.apply(this, args);
+      } catch (error) {
+        this.log.error(`Error in ${qualifiedName}`, error as Error);
+        throw error;
+      }
     }
+    this.log.trace(`${qualifiedName} called with: ${serializeArgs(args)}`);
     try {
       const result = original.apply(this, args);
-      if (this.log.logLevel === LogLevel.Trace) {
-        this.log.trace(`${qualifiedName} returned: ${serializeResult(result)}`);
-      }
+      this.log.trace(`${qualifiedName} returned: ${serializeResult(result)}`);
       return result;
     } catch (error) {
       this.log.error(`Error in ${qualifiedName}`, error as Error);
@@ -129,14 +120,18 @@ export function logAsyncMethod(
   const original = descriptor.value as (this: WithLog, ...args: unknown[]) => Promise<unknown>;
 
   descriptor.value = async function (this: WithLog, ...args: unknown[]) {
-    if (this.log.logLevel === LogLevel.Trace) {
-      this.log.trace(`${qualifiedName} called with: ${serializeArgs(args)}`);
+    if (this.log.logLevel !== LogLevel.Trace) {
+      try {
+        return await original.apply(this, args);
+      } catch (error) {
+        this.log.error(`Error in ${qualifiedName}`, error as Error);
+        throw error;
+      }
     }
+    this.log.trace(`${qualifiedName} called with: ${serializeArgs(args)}`);
     try {
       const result = await original.apply(this, args);
-      if (this.log.logLevel === LogLevel.Trace) {
-        this.log.trace(`${qualifiedName} returned: ${serializeResult(result)}`);
-      }
+      this.log.trace(`${qualifiedName} returned: ${serializeResult(result)}`);
       return result;
     } catch (error) {
       this.log.error(`Error in ${qualifiedName}`, error as Error);
