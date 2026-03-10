@@ -804,5 +804,152 @@ suite("Google Java Format for VS Code – e2e", () => {
         vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
       ).catch(() => {});
     });
+
+    // -----------------------------------------------------------------------
+    // Palantir-specific error conditions
+    //
+    // These tests verify that invalid palantir configurations are caught early
+    // and surfaced as error notifications rather than silently failing.
+    // They cover three distinct negative paths:
+    //   1. jar-file mode with palantir (rejected before any platform check)
+    //   2. palantir on an unsupported platform (Windows, macOS x86-64)
+    //   3. non-existent palantir version on a supported platform
+    // -----------------------------------------------------------------------
+
+    test("style:palantir with mode:jar-file triggers a load failure notification (all platforms)", async function () {
+      this.timeout(15_000);
+      // Palantir does not publish a standalone jar; the extension throws before
+      // any platform or network check when mode=jar-file is combined with palantir.
+      await cfg().update("executable", undefined, GLOBAL);
+      await cfg().update("style", "palantir", GLOBAL);
+      await cfg().update("mode", "jar-file", GLOBAL);
+
+      const shown: string[] = [];
+      const origFn = vscode.window.showErrorMessage;
+      try {
+        // biome-ignore lint/suspicious/noExplicitAny: test-only spy on vscode.window.showErrorMessage
+        (vscode.window as any).showErrorMessage = (...args: unknown[]) => {
+          shown.push(String(args[0]));
+          return Promise.resolve(undefined);
+        };
+        await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
+        // Wait for the error notification to be captured by the spy; the
+        // catch suppresses the timeout so the assert below gives a clear message.
+        await waitUntil(() => shown.length > 0, 5_000).catch(() => {});
+      } finally {
+        // biome-ignore lint/suspicious/noExplicitAny: restore original
+        (vscode.window as any).showErrorMessage = origFn;
+      }
+
+      assert.ok(
+        shown.length > 0,
+        "An error notification should be shown when palantir style is combined with jar-file mode",
+      );
+      assert.ok(
+        shown[0].toLowerCase().includes("jar"),
+        `Error message should mention 'jar', got: "${shown[0]}"`,
+      );
+
+      // Restore a working configuration.
+      await cfg().update("style", undefined, GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+      await Promise.resolve(
+        vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
+      ).catch(() => {});
+    });
+
+    test("style:palantir on unsupported platform triggers a load failure notification", async function () {
+      if (isPalantirPlatform()) {
+        console.log(
+          "  ↳ Skipping: current platform supports palantir native binary (need an unsupported platform to test this path)",
+        );
+        return;
+      }
+      this.timeout(15_000);
+      // On platforms without a palantir native binary (Windows, macOS x86-64),
+      // resolvePalantirExecutableFile throws an error before attempting any download.
+      await cfg().update("executable", undefined, GLOBAL);
+      await cfg().update("style", "palantir", GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+
+      const shown: string[] = [];
+      const origFn = vscode.window.showErrorMessage;
+      try {
+        // biome-ignore lint/suspicious/noExplicitAny: test-only spy on vscode.window.showErrorMessage
+        (vscode.window as any).showErrorMessage = (...args: unknown[]) => {
+          shown.push(String(args[0]));
+          return Promise.resolve(undefined);
+        };
+        await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
+        await waitUntil(() => shown.length > 0, 5_000).catch(() => {});
+      } finally {
+        // biome-ignore lint/suspicious/noExplicitAny: restore original
+        (vscode.window as any).showErrorMessage = origFn;
+      }
+
+      assert.ok(
+        shown.length > 0,
+        `An error notification should be shown when palantir native binary is unavailable on ${process.platform}-${process.arch}`,
+      );
+      assert.ok(
+        shown[0].toLowerCase().includes("palantir"),
+        `Error message should mention 'palantir', got: "${shown[0]}"`,
+      );
+
+      // Restore a working configuration.
+      await cfg().update("style", undefined, GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+      await Promise.resolve(
+        vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
+      ).catch(() => {});
+    });
+
+    test("style:palantir with non-existent version triggers a load failure notification (supported platforms)", async function () {
+      if (!isPalantirPlatform()) {
+        console.log("  ↳ Skipping: palantir native binary unavailable on this platform");
+        return;
+      }
+      this.timeout(30_000);
+      // Set a palantir version that does not exist on Maven Central (0.0.0).
+      // resolvePalantirExecutableFile constructs the URL successfully, but when
+      // Cache.get() tries to download it, Maven Central returns HTTP 404, causing
+      // the load to fail and an error notification to be shown.
+      await cfg().update("executable", undefined, GLOBAL);
+      await cfg().update("style", "palantir", GLOBAL);
+      await cfg().update("version", "0.0.0", GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+
+      const shown: string[] = [];
+      const origFn = vscode.window.showErrorMessage;
+      try {
+        // biome-ignore lint/suspicious/noExplicitAny: test-only spy on vscode.window.showErrorMessage
+        (vscode.window as any).showErrorMessage = (...args: unknown[]) => {
+          shown.push(String(args[0]));
+          return Promise.resolve(undefined);
+        };
+        await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
+        await waitUntil(() => shown.length > 0, 5_000).catch(() => {});
+      } finally {
+        // biome-ignore lint/suspicious/noExplicitAny: restore original
+        (vscode.window as any).showErrorMessage = origFn;
+      }
+
+      assert.ok(
+        shown.length > 0,
+        "An error notification should be shown when a non-existent palantir version is requested",
+      );
+
+      // Restore a working palantir configuration (latest version on a supported platform).
+      await cfg().update("version", "latest", GLOBAL);
+      await Promise.resolve(
+        vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
+      ).catch(() => {});
+      // Clean up palantir settings for subsequent tests.
+      await cfg().update("style", undefined, GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+      await Promise.resolve(
+        vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
+      ).catch(() => {});
+    });
   });
 });
