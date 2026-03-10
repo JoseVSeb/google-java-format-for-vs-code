@@ -12,6 +12,10 @@ import type { LogOutputChannel } from "vscode";
 import { LogLevel } from "vscode";
 import { logAsyncMethod, logMethod } from "../../logDecorator";
 
+// Keep these in sync with the truncation thresholds in src/logDecorator.ts.
+const MULTILINE_PREVIEW_CHARS = 40;
+const LONG_MULTILINE_SEGMENT_LENGTH = 50;
+
 // ---------------------------------------------------------------------------
 // Minimal mock that satisfies the `WithLog` interface expected by both
 // decorators.  Only `trace` and `error` are asserted in these tests.
@@ -48,6 +52,17 @@ function makeMockLog(logLevel = LogLevel.Info): {
     } as unknown as LogOutputChannel["onDidChangeLogLevel"],
   } as unknown as LogOutputChannel;
   return { log, errors, traces };
+}
+
+function assertTraceContainsSerializedValue(
+  trace: string,
+  prefix: string,
+  expectedSerializedSubstrings: string[],
+): void {
+  assert.ok(trace.startsWith(prefix));
+  for (const expectedSerializedSubstring of expectedSerializedSubstrings) {
+    assert.ok(trace.includes(expectedSerializedSubstring));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -119,24 +134,35 @@ suite("logDecorator – unit", () => {
       }
     }
 
-    const shortMultiline = "a\nb";
-    const longMultiline = `${"a".repeat(50)}\n${"b".repeat(50)}`;
-    const truncatedLongMultiline = `${longMultiline.slice(0, 40)}...${longMultiline.slice(-40)}`;
+    const shortMultilineInput = "a\nb";
+    const longMultilineInput = `${"a".repeat(LONG_MULTILINE_SEGMENT_LENGTH)}\n${"b".repeat(LONG_MULTILINE_SEGMENT_LENGTH)}`;
+    const expectedTruncatedOutput = `${longMultilineInput.slice(0, MULTILINE_PREVIEW_CHARS)}...${longMultilineInput.slice(-MULTILINE_PREVIEW_CHARS)}`;
     const value = {
-      longMultiline,
+      longMultiline: longMultilineInput,
       map: new Map([["one", 1]]),
       set: new Set(["x", "y"]),
-      shortMultiline,
+      shortMultiline: shortMultilineInput,
     };
 
     assert.deepStrictEqual(new Echo().echo(value), value);
     assert.strictEqual(traces.length, 2);
-    for (const trace of traces) {
-      assert.ok(trace.includes(`"shortMultiline":${JSON.stringify(shortMultiline)}`));
-      assert.ok(trace.includes(`"longMultiline":${JSON.stringify(truncatedLongMultiline)}`));
-      assert.ok(trace.includes('"map":{"__type__":"Map","entries":[["one",1]]}'));
-      assert.ok(trace.includes('"set":{"__type__":"Set","values":["x","y"]}'));
-    }
+    const expectedSerializedSubstrings = [
+      `"shortMultiline":${JSON.stringify(shortMultilineInput)}`,
+      `"longMultiline":${JSON.stringify(expectedTruncatedOutput)}`,
+      '"map":{"__type__":"Map","entries":[["one",1]]}',
+      '"set":{"__type__":"Set","values":["x","y"]}',
+    ];
+
+    assertTraceContainsSerializedValue(
+      traces[0],
+      "Echo.echo called with: [",
+      expectedSerializedSubstrings,
+    );
+    assertTraceContainsSerializedValue(
+      traces[1],
+      "Echo.echo returned: {",
+      expectedSerializedSubstrings,
+    );
   });
 
   test("logMethod trace: falls back when arguments or return values are unserializable", () => {
