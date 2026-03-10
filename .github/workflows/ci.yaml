@@ -156,6 +156,42 @@ jobs:
           BIN=$(find "${RUNNER_TEMP}/gjf-native" -type f | head -1)
           [ -n "$BIN" ] && echo "GJF_EXECUTABLE=$BIN" >> "$GITHUB_ENV" || true
 
+      # --------------------------------------------------------------------------
+      # Pre-download the Palantir native binary for Scenario J (executable override)
+      # and export the discovered version for Scenario K (explicit version).
+      #
+      # Palantir only publishes native binaries for Linux (glibc x86-64 and
+      # aarch64) and macOS (aarch64).  The step is therefore only run on
+      # Linux CI runners (ubuntu-latest = linux-x64).  On Windows, both
+      # PALANTIR_EXECUTABLE and PALANTIR_VERSION remain unset and both
+      # palantir executable-override/explicit-version scenarios skip gracefully.
+      # --------------------------------------------------------------------------
+      - name: Download Palantir native binary (for executable + explicit-version scenarios)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          METADATA=$(curl -sf \
+            "https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/maven-metadata.xml" \
+            || true)
+          VERSION=$(echo "$METADATA" | grep -oP '(?<=<release>)[^<]+' || true)
+          if [ -z "$VERSION" ]; then
+            echo "Could not determine Palantir version from Maven Central, skipping"
+            exit 0
+          fi
+          # Export the version so Scenario K can configure 'version' explicitly.
+          echo "PALANTIR_VERSION=$VERSION" >> "$GITHUB_ENV"
+          # Download the native binary for Scenario J (executable override).
+          URL="https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/${VERSION}/palantir-java-format-native-${VERSION}-nativeImage-linux-glibc_x86-64.bin"
+          mkdir -p "${RUNNER_TEMP}/palantir-native"
+          OUT="${RUNNER_TEMP}/palantir-native/palantir-java-format"
+          curl -sf -L -o "$OUT" "$URL" || true
+          if [ -f "$OUT" ] && [ -s "$OUT" ]; then
+            chmod +x "$OUT"
+            echo "PALANTIR_EXECUTABLE=$OUT" >> "$GITHUB_ENV"
+          else
+            echo "Failed to download Palantir native binary; Scenario J will be skipped"
+          fi
+
       - name: Compile test sources
         run: yarn compile-tests
 
