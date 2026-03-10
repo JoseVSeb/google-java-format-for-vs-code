@@ -1,16 +1,26 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import path from "node:path";
 import type { ExtensionContext, LogOutputChannel } from "vscode";
 import { commands, ProgressLocation, window } from "vscode";
 import type { Cache } from "./Cache";
 import type { ExtensionConfiguration } from "./ExtensionConfiguration";
 import type { GoogleJavaFormatService } from "./GoogleJavaFormatService";
-import { logAsyncMethod } from "./logDecorator";
+import { logAsyncMethod, logMethod } from "./logDecorator";
+
+type RunnerConfig = {
+  cwd: string;
+  runnerFile: string;
+  runnerArgs: string[];
+};
 
 export class Executable {
-  private runnerFile: string = null!;
-  private runnerArgs: string[] = null!;
-  private cwd: string = null!;
+  // loadPromise carries the resolved RunnerConfig so that run() reads a
+  // self-consistent snapshot from whichever load() call it awaits.  This means
+  // load() uses only local variables (no shared-field writes across awaits), and
+  // concurrent / overlapping calls cannot corrupt each other's state.
+  // The `!` is safe because getInstance() always calls startLoad() before
+  // returning, guaranteeing loadPromise is assigned before run() can be invoked.
+  private loadPromise!: Promise<RunnerConfig>;
 
   private constructor(
     private context: ExtensionContext,
@@ -21,10 +31,11 @@ export class Executable {
   ) {
     this.run = this.run.bind(this);
     this.load = this.load.bind(this);
+    this.startLoad = this.startLoad.bind(this);
     this.configurationChangeListener = this.configurationChangeListener.bind(this);
   }
 
-  public static async getInstance(
+  public static getInstance(
     context: ExtensionContext,
     config: ExtensionConfiguration,
     cache: Cache,
@@ -32,19 +43,21 @@ export class Executable {
     log: LogOutputChannel,
   ) {
     const instance = new Executable(context, config, cache, service, log);
-    await instance.load();
+    instance.startLoad();
     return instance;
   }
 
   // TODO: signal is accepted for future cancellation support; execSync is synchronous
   // and cannot honour an AbortSignal mid-execution — switch to async spawn when needed.
+  @logAsyncMethod
   async run({ args, stdin }: { args: string[]; stdin: string; signal?: AbortSignal }) {
+    const { cwd, runnerFile, runnerArgs } = await this.loadPromise;
     return new Promise<string>((resolve, reject) => {
-      const command = [this.runnerFile, ...this.runnerArgs, ...args, "-"].join(" ");
+      const command = [runnerFile, ...runnerArgs, ...args, "-"].join(" ");
       this.log.debug(`> ${command}`);
       try {
         const stdout = execSync(command, {
-          cwd: this.cwd,
+          cwd,
           encoding: "utf8",
           input: stdin,
           maxBuffer: Number.POSITIVE_INFINITY,
@@ -57,51 +70,77 @@ export class Executable {
     });
   }
 
+  @logMethod
   subscribe() {
     this.config.subscriptions.push(this.configurationChangeListener);
     this.context.subscriptions.push(
-      commands.registerCommand("googleJavaFormatForVSCode.reloadExecutable", this.load),
+      commands.registerCommand("googleJavaFormatForVSCode.reloadExecutable", () => {
+        this.startLoad();
+        // loadPromise may reject (e.g. bad version or unreachable URL).
+        // Catch the rejection here to show an error notification instead of
+        // propagating it to the VS Code command infrastructure as an unhandled
+        // rejection. The error is already logged by @logAsyncMethod on load().
+        return this.loadPromise.catch((err: unknown) => {
+          const message = `Google Java Format: Failed to reload executable. ${err instanceof Error ? err.message : String(err)}`;
+          void window.showErrorMessage(message);
+        });
+      }),
     );
   }
 
+  @logMethod
+  private startLoad(): void {
+    this.loadPromise = this.load();
+    // Attach a no-op handler so that a rejection before the first format attempt
+    // does not produce an "unhandledRejection" warning.  Errors are already
+    // logged by the @logAsyncMethod decorator on load(), and any awaiter of
+    // run() will still observe the rejection through this.loadPromise.
+    this.loadPromise.catch(() => {});
+  }
+
   @logAsyncMethod
-  private async load() {
+  private async load(): Promise<RunnerConfig> {
     const uri = await this.service.resolveExecutableFile(this.config, this.context);
 
     const { fsPath } = uri.scheme === "file" ? uri : await this.cache.get(uri.toString());
 
     const isJar = fsPath.endsWith(".jar");
-    this.cwd = path.dirname(fsPath);
+    const cwd = path.dirname(fsPath);
     const basename = path.basename(fsPath);
 
-    this.log.debug(`Setting current working directory: ${this.cwd}`);
+    this.log.debug(`Setting current working directory: ${cwd}`);
 
-    await this.enableExecutionPermission(basename);
+    await this.enableExecutionPermission(cwd, basename);
 
+    let runnerFile: string;
+    let runnerArgs: string[];
     if (isJar) {
-      this.runnerFile = "java";
-      this.runnerArgs = ["-jar", `./${basename}`];
+      runnerFile = "java";
+      runnerArgs = ["-jar", `./${basename}`];
     } else if (process.platform === "win32") {
-      this.runnerFile = basename;
-      this.runnerArgs = [];
+      runnerFile = basename;
+      runnerArgs = [];
     } else {
-      this.runnerFile = `./${basename}`;
-      this.runnerArgs = [];
+      runnerFile = `./${basename}`;
+      runnerArgs = [];
     }
+
+    return { cwd, runnerFile, runnerArgs };
   }
 
-  private async enableExecutionPermission(basename: string) {
+  @logAsyncMethod
+  private async enableExecutionPermission(cwd: string, basename: string) {
     if (basename.endsWith(".jar")) {
       return;
     }
 
     if ((["linux", "darwin"] as NodeJS.Platform[]).includes(process.platform)) {
-      const command = `chmod +x ${basename}`;
-      this.log.debug(`> ${command}`);
-      execSync(command, { cwd: this.cwd });
+      this.log.debug(`Setting executable permission on ${basename}`);
+      execFileSync("chmod", ["+x", basename], { cwd });
     }
   }
 
+  @logAsyncMethod
   private async configurationChangeListener() {
     this.log.info("Configuration change detected.");
     const action = await window.showInformationMessage(
@@ -122,7 +161,14 @@ export class Executable {
         title: "Updating executable...",
         cancellable: false,
       },
-      this.load,
+      () => {
+        this.startLoad();
+        return this.loadPromise.catch((err: unknown) => {
+          const message = `Google Java Format: Failed to update executable. ${err instanceof Error ? err.message : String(err)}`;
+          this.log.error(message);
+          void window.showErrorMessage(message);
+        });
+      },
     );
   }
 }

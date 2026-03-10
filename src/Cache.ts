@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import type { ExtensionContext, LogOutputChannel } from "vscode";
-import { commands, Uri, workspace } from "vscode";
-import { logAsyncMethod } from "./logDecorator";
+import { commands, Uri, window, workspace } from "vscode";
+import { logAsyncMethod, logMethod } from "./logDecorator";
 
 export class Cache {
   private uri: Uri;
@@ -27,6 +27,7 @@ export class Cache {
     return cache;
   }
 
+  @logMethod
   subscribe() {
     this.context.subscriptions.push(
       commands.registerCommand("googleJavaFormatForVSCode.clearCache", this.clear),
@@ -40,12 +41,16 @@ export class Cache {
     await commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
   }
 
+  @logAsyncMethod
   private async init() {
     try {
       await workspace.fs.createDirectory(this.uri);
       this.log.debug(`Cache directory created at ${this.uri.toString()}`);
     } catch (error) {
       this.log.error(`Failed to create cache directory: ${error}`);
+      void window.showErrorMessage(
+        `Google Java Format: Failed to initialize cache. Format operations will be unavailable. ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }

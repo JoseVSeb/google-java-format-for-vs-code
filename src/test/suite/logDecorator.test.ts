@@ -1,32 +1,41 @@
 /**
  * Unit tests for the @logMethod and @logAsyncMethod decorators.
  *
- * These tests import the compiled decorator directly to verify that both the
- * synchronous and asynchronous catch paths (lines 30-33 and 58-61 in
- * logDecorator.ts) re-log via `log.error` and re-throw the original error.
- *
- * Note: because the VS Code test coverage harness instruments `dist/**` (the
- * webpack bundle), and these tests import `logDecorator` from the compiled
- * `out/` tree, the additional branch hits appear in the bundled source map
- * for `src/logDecorator.ts` via the shared decorator factory.
+ * These tests cover both decorator wrappers and the trace-only serialization
+ * helpers that sit behind them: no-argument calls, undefined return values,
+ * multiline string trimming, Map/Set serialization, and the fallback paths for
+ * unserializable values.
  */
 
 import * as assert from "node:assert";
 import type { LogOutputChannel } from "vscode";
+import { LogLevel } from "vscode";
 import { logAsyncMethod, logMethod } from "../../logDecorator";
+
+// Keep these in sync with the truncation thresholds in src/logDecorator.ts.
+const MULTILINE_PREVIEW_CHARS = 40;
+const LONG_MULTILINE_SEGMENT_LENGTH = 50;
 
 // ---------------------------------------------------------------------------
 // Minimal mock that satisfies the `WithLog` interface expected by both
-// decorators.  Only `debug` and `error` are read at runtime.
+// decorators.  Only `trace` and `error` are asserted in these tests.
 // ---------------------------------------------------------------------------
-function makeMockLog(): { log: LogOutputChannel; errors: Error[] } {
-  const errors: Error[] = [];
+function makeMockLog(logLevel = LogLevel.Info): {
+  log: LogOutputChannel;
+  errors: Array<{ message: string; error: Error }>;
+  traces: string[];
+} {
+  const errors: Array<{ message: string; error: Error }> = [];
+  const traces: string[] = [];
   const log = {
     debug: () => {},
     info: () => {},
     warn: () => {},
-    error: (_msg: string, err: Error) => {
-      errors.push(err);
+    error: (message: string, error: Error) => {
+      errors.push({ message, error });
+    },
+    trace: (message: string) => {
+      traces.push(message);
     },
     // Remaining LogOutputChannel members – not exercised by the decorator.
     append: () => {},
@@ -37,13 +46,23 @@ function makeMockLog(): { log: LogOutputChannel; errors: Error[] } {
     hide: () => {},
     dispose: () => {},
     name: "mock",
-    logLevel: 0 as number,
+    logLevel,
     onDidChangeLogLevel: {
       dispose: () => {},
     } as unknown as LogOutputChannel["onDidChangeLogLevel"],
-    trace: () => {},
   } as unknown as LogOutputChannel;
-  return { log, errors };
+  return { log, errors, traces };
+}
+
+function assertTraceContainsSerializedValue(
+  trace: string,
+  prefix: string,
+  expectedSerializedSubstrings: string[],
+): void {
+  assert.ok(trace.startsWith(prefix));
+  for (const expectedSerializedSubstring of expectedSerializedSubstrings) {
+    assert.ok(trace.includes(expectedSerializedSubstring));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -81,8 +100,91 @@ suite("logDecorator – unit", () => {
 
     assert.throws(() => new SyncThrower().doThrow(), /sync-error/);
     assert.strictEqual(errors.length, 1, "log.error should have been called exactly once");
-    assert.ok(errors[0] instanceof Error, "the logged value should be an Error");
-    assert.strictEqual(errors[0].message, "sync-error");
+    assert.ok(errors[0].error instanceof Error, "the logged value should be an Error");
+    assert.strictEqual(errors[0].message, "Error in SyncThrower.doThrow");
+    assert.strictEqual(errors[0].error.message, "sync-error");
+  });
+
+  test("logMethod trace: logs no arguments and undefined return value", () => {
+    const { log, traces } = makeMockLog(LogLevel.Trace);
+
+    class VoidMethod {
+      readonly log = log;
+
+      @logMethod
+      noArgs(): void {}
+    }
+
+    assert.strictEqual(new VoidMethod().noArgs(), undefined);
+    assert.deepStrictEqual(traces, [
+      "VoidMethod.noArgs called with: (no arguments)",
+      "VoidMethod.noArgs returned: undefined",
+    ]);
+  });
+
+  test("logMethod trace: serializes multiline strings, Map, and Set values", () => {
+    const { log, traces } = makeMockLog(LogLevel.Trace);
+
+    class Echo {
+      readonly log = log;
+
+      @logMethod
+      echo(value: unknown) {
+        return value;
+      }
+    }
+
+    const shortMultilineInput = "a\nb";
+    const longMultilineInput = `${"a".repeat(LONG_MULTILINE_SEGMENT_LENGTH)}\n${"b".repeat(LONG_MULTILINE_SEGMENT_LENGTH)}`;
+    const expectedTruncatedOutput = `${longMultilineInput.slice(0, MULTILINE_PREVIEW_CHARS)}...${longMultilineInput.slice(-MULTILINE_PREVIEW_CHARS)}`;
+    const value = {
+      longMultiline: longMultilineInput,
+      map: new Map([["one", 1]]),
+      set: new Set(["x", "y"]),
+      shortMultiline: shortMultilineInput,
+    };
+
+    assert.deepStrictEqual(new Echo().echo(value), value);
+    assert.strictEqual(traces.length, 2);
+    const expectedSerializedSubstrings = [
+      `"shortMultiline":${JSON.stringify(shortMultilineInput)}`,
+      `"longMultiline":${JSON.stringify(expectedTruncatedOutput)}`,
+      '"map":{"__type__":"Map","entries":[["one",1]]}',
+      '"set":{"__type__":"Set","values":["x","y"]}',
+    ];
+
+    assertTraceContainsSerializedValue(
+      traces[0],
+      "Echo.echo called with: [",
+      expectedSerializedSubstrings,
+    );
+    assertTraceContainsSerializedValue(
+      traces[1],
+      "Echo.echo returned: {",
+      expectedSerializedSubstrings,
+    );
+  });
+
+  test("logMethod trace: falls back when arguments or return values are unserializable", () => {
+    const { log, traces } = makeMockLog(LogLevel.Trace);
+
+    class CircularEcho {
+      readonly log = log;
+
+      @logMethod
+      echo(value: unknown) {
+        return value;
+      }
+    }
+
+    const circular: { self?: unknown } = {};
+    circular.self = circular;
+
+    assert.strictEqual(new CircularEcho().echo(circular), circular);
+    assert.deepStrictEqual(traces, [
+      "CircularEcho.echo called with: (unserializable)",
+      "CircularEcho.echo returned: (unserializable)",
+    ]);
   });
 
   // -------------------------------------------------------------------------
@@ -118,7 +220,27 @@ suite("logDecorator – unit", () => {
 
     await assert.rejects(() => new AsyncThrower().doThrow(), /async-error/);
     assert.strictEqual(errors.length, 1, "log.error should have been called exactly once");
-    assert.ok(errors[0] instanceof Error, "the logged value should be an Error");
-    assert.strictEqual(errors[0].message, "async-error");
+    assert.ok(errors[0].error instanceof Error, "the logged value should be an Error");
+    assert.strictEqual(errors[0].message, "Error in AsyncThrower.doThrow");
+    assert.strictEqual(errors[0].error.message, "async-error");
+  });
+
+  test("logAsyncMethod trace: logs qualified method name, arguments, and resolved return value", async () => {
+    const { log, traces } = makeMockLog(LogLevel.Trace);
+
+    class AsyncEcho {
+      readonly log = log;
+
+      @logAsyncMethod
+      async echo(value: string) {
+        return value;
+      }
+    }
+
+    assert.strictEqual(await new AsyncEcho().echo("hello"), "hello");
+    assert.deepStrictEqual(traces, [
+      'AsyncEcho.echo called with: ["hello"]',
+      'AsyncEcho.echo returned: "hello"',
+    ]);
   });
 });

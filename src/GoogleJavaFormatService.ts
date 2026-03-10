@@ -62,6 +62,7 @@ export class GoogleJavaFormatService {
     return isRemote ? Uri.parse(value, true) : Uri.file(value);
   }
 
+  @logAsyncMethod
   async resolveExecutableFile(
     { executable, mode, version }: GoogleJavaFormatConfiguration,
     context?: ExtensionContext,

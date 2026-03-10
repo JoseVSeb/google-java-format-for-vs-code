@@ -363,17 +363,35 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       });
       await vscode.window.showTextDocument(doc);
 
-      // Formatting an invalid file should complete quickly (GJF returns
-      // immediately with a non-zero exit code).
-      await vscode.commands.executeCommand("editor.action.formatDocument");
+      // Spy on showErrorMessage to validate that an error notification is
+      // displayed when GJF exits non-zero.
+      const shown: string[] = [];
+      const origFn = vscode.window.showErrorMessage;
+      try {
+        // biome-ignore lint/suspicious/noExplicitAny: test-only spy on vscode.window.showErrorMessage
+        (vscode.window as any).showErrorMessage = (...args: unknown[]) => {
+          shown.push(String(args[0]));
+          return Promise.resolve(undefined);
+        };
+        // Formatting an invalid file should complete quickly (GJF returns
+        // immediately with a non-zero exit code).
+        await vscode.commands.executeCommand("editor.action.formatDocument");
 
-      // Give the async handler time to settle.
-      await new Promise<void>((resolve) => setTimeout(resolve, 3_000));
+        // Give the async handler time to settle.
+        await new Promise<void>((resolve) => setTimeout(resolve, 3_000));
+      } finally {
+        // biome-ignore lint/suspicious/noExplicitAny: restore original
+        (vscode.window as any).showErrorMessage = origFn;
+      }
 
       assert.strictEqual(
         doc.getText(),
         invalidContent,
         "Document with invalid Java should remain unchanged after a failed format attempt",
+      );
+      assert.ok(
+        shown.length > 0,
+        "An error notification should have been shown when formatting fails",
       );
 
       await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
@@ -658,27 +676,36 @@ suite("Google Java Format for VS Code – e2e", () => {
       );
     });
 
-    test("non-existent version number triggers a load failure", async function () {
+    test("non-existent version number triggers a load failure notification", async function () {
       this.timeout(30_000);
       // Set a version tag that does not exist on GitHub (v0.0.0).
-      // getReleaseByVersion() fetches the GitHub Releases API and gets a 404,
-      // throwing "Failed to get v0.0.0 of Google Java Format."
-      // resolveExecutableFileFromConfig's catch block finds no cached URL for
-      // this stateKey and re-throws, propagating through the @logAsyncMethod
-      // decorator on Executable.load() and ultimately rejecting the command.
+      // getReleaseByVersion() fetches the GitHub Releases API and gets a 404.
+      // In the new flow, load failures are caught by the reloadExecutable
+      // command handler and surfaced as VS Code error notifications — the
+      // command itself resolves (does not throw).
       await cfg().update("executable", undefined, GLOBAL);
       await cfg().update("version", "0.0.0", GLOBAL);
 
-      let caughtError: unknown;
+      // Temporarily intercept window.showErrorMessage to capture notifications.
+      const shown: string[] = [];
+      const origFn = vscode.window.showErrorMessage;
       try {
+        // biome-ignore lint/suspicious/noExplicitAny: test-only spy on vscode.window.showErrorMessage
+        (vscode.window as any).showErrorMessage = (...args: unknown[]) => {
+          shown.push(String(args[0]));
+          return Promise.resolve(undefined);
+        };
         await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
-      } catch (e) {
-        caughtError = e;
+        // Allow the async .catch() notification handler to settle.
+        await new Promise<void>((r) => setTimeout(r, 500));
+      } finally {
+        // biome-ignore lint/suspicious/noExplicitAny: restore original
+        (vscode.window as any).showErrorMessage = origFn;
       }
 
       assert.ok(
-        caughtError instanceof Error,
-        "reloadExecutable should reject when the version does not exist on GitHub",
+        shown.length > 0,
+        "reloadExecutable should show an error notification when the version does not exist on GitHub",
       );
 
       // Restore a working configuration so subsequent tests are unaffected.
@@ -692,12 +719,12 @@ suite("Google Java Format for VS Code – e2e", () => {
       ).catch(() => {});
     });
 
-    test("https:// URL in executable that returns 404 triggers a load failure", async function () {
+    test("https:// URL in executable that returns 404 triggers a load failure notification", async function () {
       this.timeout(30_000);
       // Set executable to a well-formed HTTPS URL that resolves but returns a
       // 404 response.  This exercises:
       //   • getUriFromString's isRemote=true branch (Uri.parse called)
-      //   • Cache.get()'s !response.ok error path (lines 81-84 in Cache.ts)
+      //   • Cache.get()'s !response.ok error path in Cache.ts
       // The URL below is a GitHub API endpoint for an asset ID that does not
       // exist; GitHub returns HTTP 404 with a JSON body.
       await cfg().update(
@@ -706,16 +733,25 @@ suite("Google Java Format for VS Code – e2e", () => {
         GLOBAL,
       );
 
-      let caughtError: unknown;
+      // Temporarily intercept window.showErrorMessage to capture notifications.
+      const shown: string[] = [];
+      const origFn = vscode.window.showErrorMessage;
       try {
+        // biome-ignore lint/suspicious/noExplicitAny: test-only spy on vscode.window.showErrorMessage
+        (vscode.window as any).showErrorMessage = (...args: unknown[]) => {
+          shown.push(String(args[0]));
+          return Promise.resolve(undefined);
+        };
         await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
-      } catch (e) {
-        caughtError = e;
+        await new Promise<void>((r) => setTimeout(r, 500));
+      } finally {
+        // biome-ignore lint/suspicious/noExplicitAny: restore original
+        (vscode.window as any).showErrorMessage = origFn;
       }
 
       assert.ok(
-        caughtError instanceof Error,
-        "reloadExecutable should reject when the download URL returns a non-OK response",
+        shown.length > 0,
+        "reloadExecutable should show an error notification when the download URL returns a non-OK response",
       );
 
       // Restore a working configuration.

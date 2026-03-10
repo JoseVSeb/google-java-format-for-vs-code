@@ -52,6 +52,7 @@ export default class GoogleJavaFormatEditProvider
     return [];
   }
 
+  @logAsyncMethod
   async provideDocumentRangeFormattingEdits(
     document: TextDocument,
     range: Range,
@@ -68,6 +69,7 @@ export default class GoogleJavaFormatEditProvider
     }
   }
 
+  @logAsyncMethod
   async provideDocumentFormattingEdits(
     document: TextDocument,
     options: FormattingOptions,

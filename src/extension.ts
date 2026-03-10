@@ -22,7 +22,7 @@ export async function activate(context: ExtensionContext) {
 
   const service = new GoogleJavaFormatService(log);
 
-  const executable = await Executable.getInstance(context, config, cache, service, log);
+  const executable = Executable.getInstance(context, config, cache, service, log);
   executable.subscribe();
 
   const formatter = new GoogleJavaFormatterSync(executable, config, log);
