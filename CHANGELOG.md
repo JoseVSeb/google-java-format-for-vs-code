@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [1.2.3](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.2.2...v1.2.3) (2026-03-10)
+
+### Code Refactoring
+
+* defer executable loading from blocking activation to async task ([#70](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/70)) ([f65346b](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/f65346b59ab138405ff13bc5204928aead687033))
+
 ## [1.2.2](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.2.1...v1.2.2) (2026-03-08)
 
 ### Code Refactoring
