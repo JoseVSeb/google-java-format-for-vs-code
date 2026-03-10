@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import path from "node:path";
 import type { ExtensionContext, LogOutputChannel } from "vscode";
 import { commands, ProgressLocation, window } from "vscode";
@@ -128,9 +128,8 @@ export class Executable {
     }
 
     if ((["linux", "darwin"] as NodeJS.Platform[]).includes(process.platform)) {
-      const command = `chmod +x ${basename}`;
-      this.log.debug(`> ${command}`);
-      execSync(command, { cwd });
+      this.log.debug(`Setting executable permission on ${basename}`);
+      execFileSync("chmod", ["+x", basename], { cwd });
     }
   }
 
@@ -161,6 +160,10 @@ export class Executable {
           return this.loadPromise;
         },
       )
-      .then(undefined, (err: unknown) => this.log.error(`Failed to update executable: ${err}`));
+      .then(undefined, (err: unknown) => {
+        const message = `Google Java Format: Failed to update executable. ${err instanceof Error ? err.message : String(err)}`;
+        this.log.error(message);
+        void window.showErrorMessage(message);
+      });
   }
 }

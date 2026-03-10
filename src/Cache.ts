@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
+import throttle from "lodash-es/throttle";
 import type { ExtensionContext, LogOutputChannel } from "vscode";
-import { commands, Uri, workspace } from "vscode";
+import { commands, Uri, window, workspace } from "vscode";
 import { logAsyncMethod, logMethod } from "./logDecorator";
 
 export class Cache {
@@ -14,7 +15,18 @@ export class Cache {
   ) {
     this.uri = Uri.joinPath(context.extensionUri, cacheFolder);
     this.clear = this.clear.bind(this);
-    this.get = this.get.bind(this);
+    // Throttle `get` so that rapid or concurrent calls for the same URL share
+    // the in-flight download instead of racing to write the same cached file.
+    // `leading: true, trailing: false` means the first call fires immediately
+    // and all subsequent calls within the 2 s window return its result; a new
+    // call outside the window starts a fresh download.
+    // Note: the throttle is global (not keyed per URL). In practice the
+    // extension resolves only one executable URL per load cycle, so two
+    // different URLs will not arrive within the same window.
+    this.get = throttle(this.get.bind(this), 2000, {
+      leading: true,
+      trailing: false,
+    }) as typeof this.get;
   }
 
   public static async getInstance(
@@ -48,6 +60,9 @@ export class Cache {
       this.log.debug(`Cache directory created at ${this.uri.toString()}`);
     } catch (error) {
       this.log.error(`Failed to create cache directory: ${error}`);
+      void window.showErrorMessage(
+        `Google Java Format: Failed to initialize cache. Format operations will be unavailable. ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
