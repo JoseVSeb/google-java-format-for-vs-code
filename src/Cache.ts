@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import throttle from "lodash-es/throttle";
 import type { ExtensionContext, LogOutputChannel } from "vscode";
 import { commands, Uri, window, workspace } from "vscode";
 import { logAsyncMethod, logMethod } from "./logDecorator";
@@ -15,14 +14,7 @@ export class Cache {
   ) {
     this.uri = Uri.joinPath(context.extensionUri, cacheFolder);
     this.clear = this.clear.bind(this);
-    // Throttle `get` so that rapid or concurrent calls for the same URL share
-    // the in-flight download instead of racing to write the same cached file.
-    // Uses lodash defaults: leading=true, trailing=true — the first call fires
-    // immediately and any call within the 2 s window queues a trailing call.
-    // Note: the throttle is global (not keyed per URL). In practice the
-    // extension resolves only one executable URL per load cycle, so two
-    // different URLs will not arrive within the same window.
-    this.get = throttle(this.get.bind(this), 2000) as typeof this.get;
+    this.get = this.get.bind(this);
   }
 
   public static async getInstance(

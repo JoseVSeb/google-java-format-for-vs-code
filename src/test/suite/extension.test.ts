@@ -10,10 +10,6 @@ const EXTENSION_ID = "josevseb.google-java-format-for-vs-code";
 const FIXTURES_DIR = path.resolve(__dirname, "..", "..", "test", "fixtures");
 const CONFIG = "java.format.settings.google";
 const GLOBAL = vscode.ConfigurationTarget.Global;
-// Cache.get() is throttled at 2 s. Tests that trigger the trailing call need to
-// wait this long (plus a small buffer) to ensure the trailing invocation fires
-// and lodash stores the rejected Promise before the next reload call.
-const CACHE_THROTTLE_MS = 2000;
 
 /** Convenience accessor for the extension configuration section. */
 function cfg() {
@@ -746,15 +742,6 @@ suite("Google Java Format for VS Code – e2e", () => {
           shown.push(String(args[0]));
           return Promise.resolve(undefined);
         };
-        // First reload: the global Cache.get throttle may return a cached
-        // (old) Promise if a prior download completed within the 2-second
-        // window.  The 404 error might not surface on the first call.
-        await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
-        // Wait long enough for the lodash trailing call to fire (≥ 2 s after
-        // the last leading call) and store the 404 rejection as its result.
-        // A second reload then receives that stored rejected Promise, which
-        // causes load() to reject and the error notification to appear.
-        await new Promise<void>((r) => setTimeout(r, CACHE_THROTTLE_MS + 1000));
         await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
         await new Promise<void>((r) => setTimeout(r, 500));
       } finally {
