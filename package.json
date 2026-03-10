@@ -55,6 +55,24 @@
             "markdownDescription": "Extra CLI arguments to pass to [Google Java Format](https://github.com/google/google-java-format).",
             "default": null,
             "scope": "window"
+          },
+          "java.format.settings.google.style": {
+            "type": "string",
+            "markdownDescription": "Specifies the Java formatter to use. `google` uses [Google Java Format](https://github.com/google/google-java-format) (default). `palantir` uses [Palantir Java Format](https://github.com/palantir/palantir-java-format), which allows 120-character lines and is more lambda-friendly. When `palantir` is selected, the formatter is downloaded as a native binary from Maven Central.",
+            "default": "google",
+            "enum": [
+              "google",
+              "palantir"
+            ],
+            "enumItemLabels": [
+              "Google Java Format",
+              "Palantir Java Format"
+            ],
+            "enumDescriptions": [
+              "Use Google Java Format (default). Supports jar-file and native-binary modes.",
+              "Use Palantir Java Format. Only native-binary mode is supported. Downloaded from Maven Central."
+            ],
+            "scope": "window"
           }
         }
       }

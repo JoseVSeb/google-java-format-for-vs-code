@@ -7,10 +7,13 @@ export type GoogleJavaFormatVersion = `${number}.${number}.${number}` | "latest"
 
 export type GoogleJavaFormatMode = "jar-file" | "native-binary"; // TODO: | "background-service" — future scope
 
+export type GoogleJavaFormatStyle = "google" | "palantir";
+
 export interface GoogleJavaFormatConfiguration {
   executable?: string;
   version?: GoogleJavaFormatVersion;
   mode?: GoogleJavaFormatMode;
+  style?: GoogleJavaFormatStyle;
   extra?: string;
 }
 
@@ -18,6 +21,7 @@ export class ExtensionConfiguration implements GoogleJavaFormatConfiguration {
   executable?: string;
   version?: GoogleJavaFormatVersion;
   mode?: GoogleJavaFormatMode;
+  style?: GoogleJavaFormatStyle;
   extra?: string;
   readonly subscriptions: ((config: GoogleJavaFormatConfiguration) => void)[] = [];
 

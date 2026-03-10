@@ -21,6 +21,7 @@ async function resetConfig(): Promise<void> {
   await cfg().update("executable", undefined, GLOBAL);
   await cfg().update("version", "latest", GLOBAL);
   await cfg().update("mode", "native-binary", GLOBAL);
+  await cfg().update("style", undefined, GLOBAL);
   await cfg().update("extra", undefined, GLOBAL);
 }
 
@@ -74,6 +75,15 @@ async function isJava21Available(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Returns true when the current platform has a palantir-java-format native
+ * binary on Maven Central (linux-x64, linux-arm64, darwin-arm64).
+ */
+function isPalantirPlatform(): boolean {
+  const system = `${process.platform}-${process.arch}`;
+  return ["linux-x64", "linux-arm64", "darwin-arm64"].includes(system);
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +142,12 @@ interface FormatScenario {
    * native image the extension falls back to the jar.
    */
   mode?: "jar-file" | "native-binary";
+
+  /**
+   * Formatter style to configure: `"google"` (default) or `"palantir"`.
+   * Maps to `java.format.settings.google.style`.
+   */
+  style?: "google" | "palantir";
 
   /** Set to true when this scenario's artifact requires Java 21+ on PATH. */
   requiresJava?: boolean;
@@ -192,6 +208,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
         }
       }
 
+      // Apply the formatter style (e.g. "palantir") when provided.
+      await cfg().update("style", scenario.style ?? undefined, GLOBAL);
+
       // Apply the extra CLI args setting (e.g. "--aosp") when provided.
       await cfg().update("extra", scenario.extra ?? undefined, GLOBAL);
 
@@ -207,6 +226,7 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       await cfg().update("executable", undefined, GLOBAL);
       await cfg().update("version", "latest", GLOBAL);
       await cfg().update("mode", "native-binary", GLOBAL);
+      await cfg().update("style", undefined, GLOBAL);
       await cfg().update("extra", undefined, GLOBAL);
     });
 
@@ -214,14 +234,18 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     async function isAvailable(): Promise<boolean> {
       if (scenario.executableEnvVar && !process.env[scenario.executableEnvVar]) return false;
       if (scenario.requiresJava && !(await isJava21Available())) return false;
+      if (scenario.style === "palantir" && !isPalantirPlatform()) return false;
       return true;
     }
 
-    const skipMsg = scenario.executableEnvVar
-      ? `  ↳ Skipping: ${scenario.executableEnvVar} env var not set`
-      : scenario.requiresJava
-        ? "  ↳ Skipping: Java 21+ not available on PATH (GJF ≥ 1.22.0 requires Java 21)"
-        : null;
+    let skipMsg: string | null = null;
+    if (scenario.executableEnvVar) {
+      skipMsg = `  ↳ Skipping: ${scenario.executableEnvVar} env var not set`;
+    } else if (scenario.requiresJava) {
+      skipMsg = "  ↳ Skipping: Java 21+ not available on PATH (GJF ≥ 1.22.0 requires Java 21)";
+    } else if (scenario.style === "palantir") {
+      skipMsg = `  ↳ Skipping: Palantir Java Format has no native binary for ${process.platform}-${process.arch}`;
+    }
 
     // Resolved per-scenario settings used in test assertions.
     const formattedFixture = scenario.formattedFixture ?? "FormattedSample.java";
@@ -542,6 +566,10 @@ suite("Google Java Format for VS Code – e2e", () => {
   //     The extension calls the GitHub Releases API, resolves the download URL,
   //     downloads the binary to its local cache, and runs it.
   //
+  // The `style` setting selects the formatter:
+  //   - "google" (default): Google Java Format (from GitHub Releases)
+  //   - "palantir": Palantir Java Format (from Maven Central, native-binary only)
+  //
   // The `extra` setting is orthogonal – it applies to both approaches and is
   // exercised by scenarios F and G (AOSP 4-space style).
   //
@@ -555,6 +583,7 @@ suite("Google Java Format for VS Code – e2e", () => {
   //   F  version=latest  + native-binary + extra=--aosp (approach 2, AOSP style)
   //   G  version=latest  + jar-file      + extra=--aosp (approach 2, AOSP + Java 21+)
   //   H  executable=<file:// URI>                       (approach 1, URI form)
+  //   I  style=palantir  + version=latest + native-binary (Palantir, Maven Central)
   //
   // Scenario A is guarded by the GJF_EXECUTABLE env var set by the CI step
   // "Download GJF native binary (for executable scenario)".  Scenarios B–G
@@ -563,6 +592,8 @@ suite("Google Java Format for VS Code – e2e", () => {
   // they incur no additional download latency.
   // Scenario H uses the same binary as A but referenced via a file:// URI,
   // exercising the getUriFromString remote-URL (Uri.parse) code path.
+  // Scenario I downloads palantir-java-format from Maven Central and is skipped
+  // on platforms without a palantir native binary (Windows, macOS x86-64).
   // -------------------------------------------------------------------------
 
   addFormatSuite("Scenario A – executable: local file path", {
@@ -615,6 +646,16 @@ suite("Google Java Format for VS Code – e2e", () => {
     useFileUri: true,
   });
 
+  addFormatSuite(
+    "Scenario I – style:palantir, version:latest, mode:native-binary (Maven Central)",
+    {
+      style: "palantir",
+      version: "latest",
+      mode: "native-binary",
+      formattedFixture: "PalantirFormattedSample.java",
+    },
+  );
+
   // -------------------------------------------------------------------------
   // Clear cache command
   // -------------------------------------------------------------------------
@@ -649,12 +690,13 @@ suite("Google Java Format for VS Code – e2e", () => {
         "native-binary",
         "Default mode should be 'native-binary'",
       );
+      assert.strictEqual(config.get("style"), "google", "Default style should be 'google'");
     });
 
     test("configuration section is recognised by VS Code", () => {
       const config = vscode.workspace.getConfiguration(CONFIG);
       assert.ok(config, "Configuration section should be accessible");
-      const keys = ["executable", "version", "mode", "extra"];
+      const keys = ["executable", "version", "mode", "style", "extra"];
       for (const key of keys) {
         assert.doesNotThrow(() => config.get(key), `config.get('${key}') should not throw`);
       }
