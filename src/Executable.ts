@@ -44,6 +44,10 @@ export class Executable {
   ) {
     const instance = new Executable(context, config, cache, service, log);
     instance.startLoad();
+    instance.loadPromise.catch((err: unknown) => {
+      const message = `Google Java Format: Failed to load executable. ${err instanceof Error ? err.message : String(err)}`;
+      void window.showErrorMessage(message);
+    });
     return instance;
   }
 
@@ -75,7 +79,7 @@ export class Executable {
     this.config.subscriptions.push(this.configurationChangeListener);
     this.context.subscriptions.push(
       commands.registerCommand("googleJavaFormatForVSCode.reloadExecutable", () => {
-        this.startLoad(false);
+        this.startLoad();
         // loadPromise may reject (e.g. bad version or unreachable URL).
         // Catch the rejection here to show an error notification instead of
         // propagating it to the VS Code command infrastructure as an unhandled
@@ -89,14 +93,13 @@ export class Executable {
   }
 
   @logMethod
-  private startLoad(notifyOnError = true): void {
+  private startLoad(): void {
     this.loadPromise = this.load();
-    this.loadPromise.catch((err: unknown) => {
-      if (notifyOnError) {
-        const message = `Google Java Format: Failed to load executable. ${err instanceof Error ? err.message : String(err)}`;
-        void window.showErrorMessage(message);
-      }
-    });
+    // Attach a no-op handler so that a rejection before the first format attempt
+    // does not produce an "unhandledRejection" warning.  Errors are already
+    // logged by the @logAsyncMethod decorator on load(), and any awaiter of
+    // run() will still observe the rejection through this.loadPromise.
+    this.loadPromise.catch(() => {});
   }
 
   @logAsyncMethod
@@ -163,7 +166,7 @@ export class Executable {
         cancellable: false,
       },
       () => {
-        this.startLoad(false);
+        this.startLoad();
         return this.loadPromise.catch((err: unknown) => {
           const message = `Google Java Format: Failed to update executable. ${err instanceof Error ? err.message : String(err)}`;
           this.log.error(message);
