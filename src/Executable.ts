@@ -75,7 +75,7 @@ export class Executable {
     this.config.subscriptions.push(this.configurationChangeListener);
     this.context.subscriptions.push(
       commands.registerCommand("googleJavaFormatForVSCode.reloadExecutable", () => {
-        this.startLoad();
+        this.startLoad(false);
         // loadPromise may reject (e.g. bad version or unreachable URL).
         // Catch the rejection here to show an error notification instead of
         // propagating it to the VS Code command infrastructure as an unhandled
@@ -89,13 +89,14 @@ export class Executable {
   }
 
   @logMethod
-  private startLoad(): void {
+  private startLoad(notifyOnError = true): void {
     this.loadPromise = this.load();
-    // Attach a no-op handler so that a rejection before the first format attempt
-    // does not produce an "unhandledRejection" warning.  Errors are already
-    // logged by the @logAsyncMethod decorator on load(), and any awaiter of
-    // run() will still observe the rejection through this.loadPromise.
-    this.loadPromise.catch(() => {});
+    this.loadPromise.catch((err: unknown) => {
+      if (notifyOnError) {
+        const message = `Google Java Format: Failed to load executable. ${err instanceof Error ? err.message : String(err)}`;
+        void window.showErrorMessage(message);
+      }
+    });
   }
 
   @logAsyncMethod
@@ -162,7 +163,7 @@ export class Executable {
         cancellable: false,
       },
       () => {
-        this.startLoad();
+        this.startLoad(false);
         return this.loadPromise.catch((err: unknown) => {
           const message = `Google Java Format: Failed to update executable. ${err instanceof Error ? err.message : String(err)}`;
           this.log.error(message);

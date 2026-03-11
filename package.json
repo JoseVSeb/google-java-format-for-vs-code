@@ -28,7 +28,7 @@
           },
           "java.format.settings.google.style": {
             "type": "string",
-            "markdownDescription": "Formatter variant to use. `palantir` requires `native-binary` mode and is unavailable on Windows and macOS x86-64.",
+            "markdownDescription": "Formatter variant to use. `palantir` is a lambda-friendly variant that requires `native-binary` mode and is unavailable on Windows and macOS x86-64.",
             "default": "google",
             "enum": [
               "google",
@@ -36,7 +36,7 @@
             ],
             "markdownEnumDescriptions": [
               "[Google Java Format](https://github.com/google/google-java-format) — official Google Java style. Supports `native-binary` and `jar-file` modes.",
-              "[Palantir Java Format](https://github.com/palantir/palantir-java-format) — 120-char lines. Supports `native-binary` only. Not available on Windows or macOS x86-64."
+              "[Palantir Java Format](https://github.com/palantir/palantir-java-format) — lambda-friendly variant. Supports `native-binary` only. Not available on Windows or macOS x86-64."
             ],
             "scope": "window"
           },
