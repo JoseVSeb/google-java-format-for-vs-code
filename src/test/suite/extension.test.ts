@@ -40,6 +40,11 @@ async function waitUntil(
   throw new Error("waitUntil timed out");
 }
 
+/** Normalize CRLF/LF so string assertions are platform-neutral. */
+function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n/g, "\n");
+}
+
 /** Open a file from the fixtures directory. */
 async function openFixture(filename: string) {
   const uri = vscode.Uri.file(path.join(FIXTURES_DIR, filename));
@@ -282,13 +287,14 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       await waitUntil(() => doc.getText() !== originalText, 30_000);
 
       const formattedText = doc.getText();
+      const normalizedFormattedText = normalizeLineEndings(formattedText);
       assert.notStrictEqual(formattedText, originalText, "Document should have been reformatted");
       assert.ok(
         formattedText.includes(indentCheck),
         `Formatted code should contain "${indentCheck}" (expected indentation style)`,
       );
       assert.ok(
-        formattedText.includes(formatCheck),
+        normalizedFormattedText.includes(normalizeLineEndings(formatCheck)),
         `Formatted code should contain "${formatCheck}" (expected style-specific layout)`,
       );
 
