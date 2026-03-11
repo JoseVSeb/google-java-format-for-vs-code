@@ -243,21 +243,22 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       await cfg().update("extra", undefined, GLOBAL);
     });
 
-    /** True when the prerequisite for this scenario is met. */
-    async function isAvailable(): Promise<boolean> {
-      if (scenario.executableEnvVar && !process.env[scenario.executableEnvVar]) return false;
-      if (scenario.requiresJava && !(await isJava21Available())) return false;
-      if (scenario.style === "palantir" && !isPalantirPlatform()) return false;
-      return true;
-    }
+    /** Returns the first unmet prerequisite for this scenario, if any. */
+    async function getSkipMsg(): Promise<string | null> {
+      const hasExecutableOverride = !!(
+        scenario.executableEnvVar && process.env[scenario.executableEnvVar]
+      );
 
-    let skipMsg: string | null = null;
-    if (scenario.executableEnvVar) {
-      skipMsg = `  ↳ Skipping: ${scenario.executableEnvVar} env var not set`;
-    } else if (scenario.requiresJava) {
-      skipMsg = "  ↳ Skipping: Java 21+ not available on PATH (GJF ≥ 1.22.0 requires Java 21)";
-    } else if (scenario.style === "palantir") {
-      skipMsg = `  ↳ Skipping: Palantir Java Format has no native binary for ${process.platform}-${process.arch}`;
+      if (scenario.executableEnvVar && !hasExecutableOverride) {
+        return `  ↳ Skipping: ${scenario.executableEnvVar} env var not set`;
+      }
+      if (scenario.requiresJava && !(await isJava21Available())) {
+        return "  ↳ Skipping: Java 21+ not available on PATH (GJF ≥ 1.22.0 requires Java 21)";
+      }
+      if (scenario.style === "palantir" && !hasExecutableOverride && !isPalantirPlatform()) {
+        return `  ↳ Skipping: Palantir Java Format has no native binary for ${process.platform}-${process.arch}`;
+      }
+      return null;
     }
 
     // Resolved per-scenario settings used in test assertions.
@@ -273,8 +274,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     // -----------------------------------------------------------------------
 
     test("format document applies edits to an unformatted Java file", async function () {
-      if (!(await isAvailable())) {
-        console.log(skipMsg ?? "  ↳ Skipping");
+      const skipMsg = await getSkipMsg();
+      if (skipMsg) {
+        console.log(skipMsg);
         return;
       }
       this.timeout(60_000);
@@ -302,8 +304,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     });
 
     test("format range applies edits only within the selected range", async function () {
-      if (!(await isAvailable())) {
-        console.log(skipMsg ?? "  ↳ Skipping");
+      const skipMsg = await getSkipMsg();
+      if (skipMsg) {
+        console.log(skipMsg);
         return;
       }
       this.timeout(60_000);
@@ -327,8 +330,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     });
 
     test("already-formatted document is unchanged after formatting", async function () {
-      if (!(await isAvailable())) {
-        console.log(skipMsg ?? "  ↳ Skipping");
+      const skipMsg = await getSkipMsg();
+      if (skipMsg) {
+        console.log(skipMsg);
         return;
       }
       this.timeout(60_000);
@@ -349,8 +353,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     });
 
     test("format an in-memory (untitled) Java document", async function () {
-      if (!(await isAvailable())) {
-        console.log(skipMsg ?? "  ↳ Skipping");
+      const skipMsg = await getSkipMsg();
+      if (skipMsg) {
+        console.log(skipMsg);
         return;
       }
       this.timeout(60_000);
@@ -390,8 +395,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     });
 
     test("format document with invalid Java shows error notification and leaves content unchanged", async function () {
-      if (!(await isAvailable())) {
-        console.log(skipMsg ?? "  ↳ Skipping");
+      const skipMsg = await getSkipMsg();
+      if (skipMsg) {
+        console.log(skipMsg);
         return;
       }
       this.timeout(30_000);
