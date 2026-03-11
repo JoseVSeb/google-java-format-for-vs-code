@@ -22,37 +22,47 @@
         "properties": {
           "java.format.settings.google.executable": {
             "type": "string",
-            "markdownDescription": "*Not Recommended.* Specifies url or file path to [Google Java Format jar executable](https://github.com/google/google-java-format/releases). Overrides `java.format.settings.google.version`.",
+            "markdownDescription": "*Override (not recommended).* Specifies a URL or local file path to a formatter executable. **When set, `version`, `mode`, and `style` are all ignored.** Use this only when you need a binary that differs from those auto-downloaded by this extension.",
             "default": null,
+            "scope": "window"
+          },
+          "java.format.settings.google.style": {
+            "type": "string",
+            "markdownDescription": "Selects the Java formatter. Ignored when `executable` is set.\n- `google` — [Google Java Format](https://github.com/google/google-java-format): the official Google Java style formatter. Supports both `jar-file` and `native-binary` modes.\n- `palantir` — [Palantir Java Format](https://github.com/palantir/palantir-java-format): 120-char lines, more lambda-friendly. **Only `native-binary` mode is supported.** Downloaded from Maven Central.",
+            "default": "google",
+            "enum": [
+              "google",
+              "palantir"
+            ],
+            "markdownEnumDescriptions": [
+              "[Google Java Format](https://github.com/google/google-java-format) (default). Supports both `jar-file` and `native-binary` modes.",
+              "[Palantir Java Format](https://github.com/palantir/palantir-java-format). 120-char lines, more lambda-friendly. **Only `native-binary` mode is supported.** Binary downloaded from Maven Central. Not available on Windows or macOS x86-64."
+            ],
             "scope": "window"
           },
           "java.format.settings.google.version": {
             "type": "string",
-            "markdownDescription": "*Recommended.* Specifies version to be used of [Google Java Format executable](https://github.com/google/google-java-format/releases) in format `{major}.{minor}.{patch}`. Default: `latest`.",
+            "markdownDescription": "*Recommended.* Ignored when `executable` is set. Specifies the formatter version to use.\n- For `google` style: a [Google Java Format](https://github.com/google/google-java-format/releases) release tag such as `1.25.2`, or `latest`.\n- For `palantir` style: a [Palantir Java Format](https://github.com/palantir/palantir-java-format) Maven Central version such as `2.89.0`, or `latest`.\n\nDefault: `latest`.",
             "default": "latest",
             "scope": "window"
           },
           "java.format.settings.google.mode": {
             "type": "string",
-            "markdownDescription": "Specifies the runtime mode of [Google Java Format](https://github.com/google/google-java-format/releases). Used with `java.format.settings.google.version`",
+            "markdownDescription": "Specifies the runtime artifact to use. Ignored when `executable` is set. **Note:** `jar-file` mode is only available for `google` style; selecting it with `palantir` style will produce an error.",
             "default": "native-binary",
             "enum": [
               "jar-file",
               "native-binary"
             ],
-            "enumItemLabels": [
-              "Jar File",
-              "Native Binary"
-            ],
-            "enumDescriptions": [
-              "Use Java runtime to execute jar file of Google Java Format.",
-              "Use Native Binary of Google Java Format, if available, otherwise, revert to Jar File."
+            "markdownEnumDescriptions": [
+              "Run the formatter as a JAR file using the local Java runtime. **Only available for `google` style.** Requires a compatible Java runtime on PATH (Java 21+ for google-java-format ≥ 1.22.0; older versions work with their respective minimum supported Java version).",
+              "Run the platform-specific native binary (no JVM required). Supported for both `google` and `palantir` styles. Falls back to `jar-file` when no native binary is available for the current platform (google style only)."
             ],
             "scope": "window"
           },
           "java.format.settings.google.extra": {
             "type": "string",
-            "markdownDescription": "Extra CLI arguments to pass to [Google Java Format](https://github.com/google/google-java-format).",
+            "markdownDescription": "Extra CLI arguments to pass to the formatter (e.g. `--aosp` for 4-space Android Open Source Project style). Applied for both `google` and `palantir` styles.",
             "default": null,
             "scope": "window"
           }

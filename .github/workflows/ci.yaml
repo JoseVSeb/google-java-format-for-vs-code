@@ -156,6 +156,37 @@ jobs:
           BIN=$(find "${RUNNER_TEMP}/gjf-native" -type f | head -1)
           [ -n "$BIN" ] && echo "GJF_EXECUTABLE=$BIN" >> "$GITHUB_ENV" || true
 
+      # --------------------------------------------------------------------------
+      # Pre-download a Palantir native binary for Scenario J (executable override).
+      #
+      # Scenario K uses a hardcoded explicit version in the test, mirroring the
+      # fixed-version GJF scenarios, so CI only needs to provide a local binary
+      # path for the executable-override case.
+      #
+      # Palantir only publishes native binaries for Linux (glibc x86-64 and
+      # aarch64) and macOS (aarch64).  The step is therefore only run on
+      # Linux CI runners (ubuntu-latest = linux-x64).  On Windows,
+      # PALANTIR_EXECUTABLE remains unset and Scenario J skips gracefully.
+      # --------------------------------------------------------------------------
+      - name: Download Palantir native binary (for executable scenario)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          # Intentionally independent from Scenario K's hardcoded explicit-version
+          # test: Scenario J validates executable override with any working local
+          # Palantir binary, while Scenario K validates auto-download of a pinned
+          # formatter version inside the extension itself.
+          URL="https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/2.81.0/palantir-java-format-native-2.81.0-nativeImage-linux-glibc_x86-64.bin"
+          mkdir -p "${RUNNER_TEMP}/palantir-native"
+          OUT="${RUNNER_TEMP}/palantir-native/palantir-java-format"
+          curl -sf -L -o "$OUT" "$URL" || true
+          if [ -f "$OUT" ] && [ -s "$OUT" ]; then
+            chmod +x "$OUT"
+            echo "PALANTIR_EXECUTABLE=$OUT" >> "$GITHUB_ENV"
+          else
+            echo "Failed to download Palantir native binary; Scenario J will be skipped"
+          fi
+
       - name: Compile test sources
         run: yarn compile-tests
 

@@ -10,6 +10,9 @@ const EXTENSION_ID = "josevseb.google-java-format-for-vs-code";
 const FIXTURES_DIR = path.resolve(__dirname, "..", "..", "test", "fixtures");
 const CONFIG = "java.format.settings.google";
 const GLOBAL = vscode.ConfigurationTarget.Global;
+// Intentionally separate from the CI-downloaded executable used by Scenario J:
+// this constant exercises the extension's explicit-version auto-download path.
+const PALANTIR_EXPLICIT_VERSION = "2.81.0";
 
 /** Convenience accessor for the extension configuration section. */
 function cfg() {
@@ -21,6 +24,7 @@ async function resetConfig(): Promise<void> {
   await cfg().update("executable", undefined, GLOBAL);
   await cfg().update("version", "latest", GLOBAL);
   await cfg().update("mode", "native-binary", GLOBAL);
+  await cfg().update("style", undefined, GLOBAL);
   await cfg().update("extra", undefined, GLOBAL);
 }
 
@@ -36,6 +40,11 @@ async function waitUntil(
     await new Promise((r) => setTimeout(r, intervalMs));
   }
   throw new Error("waitUntil timed out");
+}
+
+/** Normalize CRLF/LF so string assertions are platform-neutral. */
+function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n/g, "\n");
 }
 
 /** Open a file from the fixtures directory. */
@@ -74,6 +83,15 @@ async function isJava21Available(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Returns true when the current platform has a palantir-java-format native
+ * binary on Maven Central (linux-x64, linux-arm64, darwin-arm64).
+ */
+function isPalantirPlatform(): boolean {
+  const system = `${process.platform}-${process.arch}`;
+  return ["linux-x64", "linux-arm64", "darwin-arm64"].includes(system);
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +151,12 @@ interface FormatScenario {
    */
   mode?: "jar-file" | "native-binary";
 
+  /**
+   * Formatter style to configure: `"google"` (default) or `"palantir"`.
+   * Maps to `java.format.settings.google.style`.
+   */
+  style?: "google" | "palantir";
+
   /** Set to true when this scenario's artifact requires Java 21+ on PATH. */
   requiresJava?: boolean;
 
@@ -156,6 +180,13 @@ interface FormatScenario {
    * Use `"    private"` for AOSP (4-space) scenarios.
    */
   indentCheck?: string;
+
+  /**
+   * Substring that must appear in the formatted output of
+   * `UnformattedSample.java`, used to verify a style-specific lambda/method
+   * chain layout. Defaults to the google-java-format layout from the fixture.
+   */
+  formatCheck?: string;
 }
 
 function addFormatSuite(suiteName: string, scenario: FormatScenario) {
@@ -192,6 +223,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
         }
       }
 
+      // Apply the formatter style (e.g. "palantir") when provided.
+      await cfg().update("style", scenario.style ?? undefined, GLOBAL);
+
       // Apply the extra CLI args setting (e.g. "--aosp") when provided.
       await cfg().update("extra", scenario.extra ?? undefined, GLOBAL);
 
@@ -207,25 +241,34 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       await cfg().update("executable", undefined, GLOBAL);
       await cfg().update("version", "latest", GLOBAL);
       await cfg().update("mode", "native-binary", GLOBAL);
+      await cfg().update("style", undefined, GLOBAL);
       await cfg().update("extra", undefined, GLOBAL);
     });
 
-    /** True when the prerequisite for this scenario is met. */
-    async function isAvailable(): Promise<boolean> {
-      if (scenario.executableEnvVar && !process.env[scenario.executableEnvVar]) return false;
-      if (scenario.requiresJava && !(await isJava21Available())) return false;
-      return true;
-    }
+    /** Returns the first unmet prerequisite for this scenario, if any. */
+    async function getSkipMsg(): Promise<string | null> {
+      const hasExecutableOverride = !!(
+        scenario.executableEnvVar && process.env[scenario.executableEnvVar]
+      );
 
-    const skipMsg = scenario.executableEnvVar
-      ? `  ↳ Skipping: ${scenario.executableEnvVar} env var not set`
-      : scenario.requiresJava
-        ? "  ↳ Skipping: Java 21+ not available on PATH (GJF ≥ 1.22.0 requires Java 21)"
-        : null;
+      if (scenario.executableEnvVar && !hasExecutableOverride) {
+        return `  ↳ Skipping: ${scenario.executableEnvVar} env var not set`;
+      }
+      if (scenario.requiresJava && !(await isJava21Available())) {
+        return "  ↳ Skipping: Java 21+ not available on PATH (GJF ≥ 1.22.0 requires Java 21)";
+      }
+      if (scenario.style === "palantir" && !hasExecutableOverride && !isPalantirPlatform()) {
+        return `  ↳ Skipping: Palantir Java Format has no native binary for ${process.platform}-${process.arch}`;
+      }
+      return null;
+    }
 
     // Resolved per-scenario settings used in test assertions.
     const formattedFixture = scenario.formattedFixture ?? "FormattedSample.java";
     const indentCheck = scenario.indentCheck ?? "  private";
+    const formatCheck =
+      scenario.formatCheck ??
+      ["project", "        .getPluginManager()", "        .withPlugin("].join("\n");
 
     // -----------------------------------------------------------------------
     // Tests (identical for every scenario; what differs is how the executable
@@ -233,8 +276,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     // -----------------------------------------------------------------------
 
     test("format document applies edits to an unformatted Java file", async function () {
-      if (!(await isAvailable())) {
-        console.log(skipMsg ?? "  ↳ Skipping");
+      const skipMsg = await getSkipMsg();
+      if (skipMsg) {
+        console.log(skipMsg);
         return;
       }
       this.timeout(60_000);
@@ -247,18 +291,24 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       await waitUntil(() => doc.getText() !== originalText, 30_000);
 
       const formattedText = doc.getText();
+      const normalizedFormattedText = normalizeLineEndings(formattedText);
       assert.notStrictEqual(formattedText, originalText, "Document should have been reformatted");
       assert.ok(
         formattedText.includes(indentCheck),
         `Formatted code should contain "${indentCheck}" (expected indentation style)`,
+      );
+      assert.ok(
+        normalizedFormattedText.includes(normalizeLineEndings(formatCheck)),
+        `Formatted code should contain "${formatCheck}" (expected style-specific layout)`,
       );
 
       await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
     });
 
     test("format range applies edits only within the selected range", async function () {
-      if (!(await isAvailable())) {
-        console.log(skipMsg ?? "  ↳ Skipping");
+      const skipMsg = await getSkipMsg();
+      if (skipMsg) {
+        console.log(skipMsg);
         return;
       }
       this.timeout(60_000);
@@ -282,8 +332,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     });
 
     test("already-formatted document is unchanged after formatting", async function () {
-      if (!(await isAvailable())) {
-        console.log(skipMsg ?? "  ↳ Skipping");
+      const skipMsg = await getSkipMsg();
+      if (skipMsg) {
+        console.log(skipMsg);
         return;
       }
       this.timeout(60_000);
@@ -304,8 +355,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     });
 
     test("format an in-memory (untitled) Java document", async function () {
-      if (!(await isAvailable())) {
-        console.log(skipMsg ?? "  ↳ Skipping");
+      const skipMsg = await getSkipMsg();
+      if (skipMsg) {
+        console.log(skipMsg);
         return;
       }
       this.timeout(60_000);
@@ -345,8 +397,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     });
 
     test("format document with invalid Java shows error notification and leaves content unchanged", async function () {
-      if (!(await isAvailable())) {
-        console.log(skipMsg ?? "  ↳ Skipping");
+      const skipMsg = await getSkipMsg();
+      if (skipMsg) {
+        console.log(skipMsg);
         return;
       }
       this.timeout(30_000);
@@ -542,6 +595,10 @@ suite("Google Java Format for VS Code – e2e", () => {
   //     The extension calls the GitHub Releases API, resolves the download URL,
   //     downloads the binary to its local cache, and runs it.
   //
+  // The `style` setting selects the formatter:
+  //   - "google" (default): Google Java Format (from GitHub Releases)
+  //   - "palantir": Palantir Java Format (from Maven Central, native-binary only)
+  //
   // The `extra` setting is orthogonal – it applies to both approaches and is
   // exercised by scenarios F and G (AOSP 4-space style).
   //
@@ -555,6 +612,9 @@ suite("Google Java Format for VS Code – e2e", () => {
   //   F  version=latest  + native-binary + extra=--aosp (approach 2, AOSP style)
   //   G  version=latest  + jar-file      + extra=--aosp (approach 2, AOSP + Java 21+)
   //   H  executable=<file:// URI>                       (approach 1, URI form)
+  //   I  style=palantir  + version=latest + native-binary (Palantir, Maven Central)
+  //   J  style=palantir  + executable=<local path>      (Palantir, executable override)
+  //   K  style=palantir  + version=<explicit> + native-binary (Palantir, explicit version)
   //
   // Scenario A is guarded by the GJF_EXECUTABLE env var set by the CI step
   // "Download GJF native binary (for executable scenario)".  Scenarios B–G
@@ -563,6 +623,15 @@ suite("Google Java Format for VS Code – e2e", () => {
   // they incur no additional download latency.
   // Scenario H uses the same binary as A but referenced via a file:// URI,
   // exercising the getUriFromString remote-URL (Uri.parse) code path.
+  // Scenario I downloads palantir-java-format from Maven Central and is skipped
+  // on platforms without a palantir native binary (Windows, macOS x86-64).
+  // Scenario J is guarded by the PALANTIR_EXECUTABLE env var set by the CI step
+  // "Download Palantir native binary (for executable scenario)".
+  // J uses PALANTIR_EXECUTABLE (pre-downloaded binary path) to exercise the
+  // executable-override code path for palantir.
+  // K uses a hardcoded explicit palantir version (matching the fixed-version
+  // google-java-format scenarios) to exercise the getPalantirReleaseByVersion()
+  // code path.
   // -------------------------------------------------------------------------
 
   addFormatSuite("Scenario A – executable: local file path", {
@@ -599,6 +668,7 @@ suite("Google Java Format for VS Code – e2e", () => {
     // for the "already-formatted" test and check for 4-space indent.
     formattedFixture: "AospFormattedSample.java",
     indentCheck: "    private",
+    formatCheck: ["project.getPluginManager()", "                .withPlugin("].join("\n"),
   });
 
   addFormatSuite("Scenario G – version:latest, mode:jar-file, extra:--aosp (AOSP style)", {
@@ -608,12 +678,42 @@ suite("Google Java Format for VS Code – e2e", () => {
     extra: "--aosp",
     formattedFixture: "AospFormattedSample.java",
     indentCheck: "    private",
+    formatCheck: ["project.getPluginManager()", "                .withPlugin("].join("\n"),
   });
 
   addFormatSuite("Scenario H – executable: file:// URI (getUriFromString Uri.parse path)", {
     executableEnvVar: "GJF_EXECUTABLE",
     useFileUri: true,
   });
+
+  addFormatSuite(
+    "Scenario I – style:palantir, version:latest, mode:native-binary (Maven Central)",
+    {
+      style: "palantir",
+      version: "latest",
+      mode: "native-binary",
+      formattedFixture: "PalantirFormattedSample.java",
+      formatCheck: 'project.getPluginManager().withPlugin("maven-publish", plugin -> {',
+    },
+  );
+
+  addFormatSuite("Scenario J – style:palantir, executable: local file path (executable override)", {
+    style: "palantir",
+    executableEnvVar: "PALANTIR_EXECUTABLE",
+    formattedFixture: "PalantirFormattedSample.java",
+    formatCheck: 'project.getPluginManager().withPlugin("maven-publish", plugin -> {',
+  });
+
+  addFormatSuite(
+    `Scenario K – style:palantir, version:${PALANTIR_EXPLICIT_VERSION}, mode:native-binary`,
+    {
+      style: "palantir",
+      version: PALANTIR_EXPLICIT_VERSION,
+      mode: "native-binary",
+      formattedFixture: "PalantirFormattedSample.java",
+      formatCheck: 'project.getPluginManager().withPlugin("maven-publish", plugin -> {',
+    },
+  );
 
   // -------------------------------------------------------------------------
   // Clear cache command
@@ -649,12 +749,13 @@ suite("Google Java Format for VS Code – e2e", () => {
         "native-binary",
         "Default mode should be 'native-binary'",
       );
+      assert.strictEqual(config.get("style"), "google", "Default style should be 'google'");
     });
 
     test("configuration section is recognised by VS Code", () => {
       const config = vscode.workspace.getConfiguration(CONFIG);
       assert.ok(config, "Configuration section should be accessible");
-      const keys = ["executable", "version", "mode", "extra"];
+      const keys = ["executable", "version", "mode", "style", "extra"];
       for (const key of keys) {
         assert.doesNotThrow(() => config.get(key), `config.get('${key}') should not throw`);
       }
@@ -757,6 +858,153 @@ suite("Google Java Format for VS Code – e2e", () => {
       // Restore a working configuration.
       await cfg().update("executable", undefined, GLOBAL);
       await cfg().update("version", "latest", GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+      await Promise.resolve(
+        vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
+      ).catch(() => {});
+    });
+
+    // -----------------------------------------------------------------------
+    // Palantir-specific error conditions
+    //
+    // These tests verify that invalid palantir configurations are caught early
+    // and surfaced as error notifications rather than silently failing.
+    // They cover three distinct negative paths:
+    //   1. jar-file mode with palantir (rejected before any platform check)
+    //   2. palantir on an unsupported platform (Windows, macOS x86-64)
+    //   3. non-existent palantir version on a supported platform
+    // -----------------------------------------------------------------------
+
+    test("style:palantir with mode:jar-file triggers a load failure notification (all platforms)", async function () {
+      this.timeout(15_000);
+      // Palantir does not publish a standalone jar; the extension throws before
+      // any platform or network check when mode=jar-file is combined with palantir.
+      await cfg().update("executable", undefined, GLOBAL);
+      await cfg().update("style", "palantir", GLOBAL);
+      await cfg().update("mode", "jar-file", GLOBAL);
+
+      const shown: string[] = [];
+      const origFn = vscode.window.showErrorMessage;
+      try {
+        // biome-ignore lint/suspicious/noExplicitAny: test-only spy on vscode.window.showErrorMessage
+        (vscode.window as any).showErrorMessage = (...args: unknown[]) => {
+          shown.push(String(args[0]));
+          return Promise.resolve(undefined);
+        };
+        await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
+        // Wait for the error notification to be captured by the spy; the
+        // catch suppresses the timeout so the assert below gives a clear message.
+        await waitUntil(() => shown.length > 0, 5_000).catch(() => {});
+      } finally {
+        // biome-ignore lint/suspicious/noExplicitAny: restore original
+        (vscode.window as any).showErrorMessage = origFn;
+      }
+
+      assert.ok(
+        shown.length > 0,
+        "An error notification should be shown when palantir style is combined with jar-file mode",
+      );
+      assert.ok(
+        shown[0].toLowerCase().includes("jar"),
+        `Error message should mention 'jar', got: "${shown[0]}"`,
+      );
+
+      // Restore a working configuration.
+      await cfg().update("style", undefined, GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+      await Promise.resolve(
+        vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
+      ).catch(() => {});
+    });
+
+    test("style:palantir on unsupported platform triggers a load failure notification", async function () {
+      if (isPalantirPlatform()) {
+        console.log(
+          "  ↳ Skipping: current platform supports palantir native binary (need an unsupported platform to test this path)",
+        );
+        return;
+      }
+      this.timeout(15_000);
+      // On platforms without a palantir native binary (Windows, macOS x86-64),
+      // resolvePalantirExecutableFile throws an error before attempting any download.
+      await cfg().update("executable", undefined, GLOBAL);
+      await cfg().update("style", "palantir", GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+
+      const shown: string[] = [];
+      const origFn = vscode.window.showErrorMessage;
+      try {
+        // biome-ignore lint/suspicious/noExplicitAny: test-only spy on vscode.window.showErrorMessage
+        (vscode.window as any).showErrorMessage = (...args: unknown[]) => {
+          shown.push(String(args[0]));
+          return Promise.resolve(undefined);
+        };
+        await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
+        await waitUntil(() => shown.length > 0, 5_000).catch(() => {});
+      } finally {
+        // biome-ignore lint/suspicious/noExplicitAny: restore original
+        (vscode.window as any).showErrorMessage = origFn;
+      }
+
+      assert.ok(
+        shown.length > 0,
+        `An error notification should be shown when palantir native binary is unavailable on ${process.platform}-${process.arch}`,
+      );
+      assert.ok(
+        shown[0].toLowerCase().includes("palantir"),
+        `Error message should mention 'palantir', got: "${shown[0]}"`,
+      );
+
+      // Restore a working configuration.
+      await cfg().update("style", undefined, GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+      await Promise.resolve(
+        vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
+      ).catch(() => {});
+    });
+
+    test("style:palantir with non-existent version triggers a load failure notification (supported platforms)", async function () {
+      if (!isPalantirPlatform()) {
+        console.log("  ↳ Skipping: palantir native binary unavailable on this platform");
+        return;
+      }
+      this.timeout(30_000);
+      // Set a palantir version that does not exist on Maven Central (0.0.0).
+      // resolvePalantirExecutableFile constructs the URL successfully, but when
+      // Cache.get() tries to download it, Maven Central returns HTTP 404, causing
+      // the load to fail and an error notification to be shown.
+      await cfg().update("executable", undefined, GLOBAL);
+      await cfg().update("style", "palantir", GLOBAL);
+      await cfg().update("version", "0.0.0", GLOBAL);
+      await cfg().update("mode", "native-binary", GLOBAL);
+
+      const shown: string[] = [];
+      const origFn = vscode.window.showErrorMessage;
+      try {
+        // biome-ignore lint/suspicious/noExplicitAny: test-only spy on vscode.window.showErrorMessage
+        (vscode.window as any).showErrorMessage = (...args: unknown[]) => {
+          shown.push(String(args[0]));
+          return Promise.resolve(undefined);
+        };
+        await vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable");
+        await waitUntil(() => shown.length > 0, 5_000).catch(() => {});
+      } finally {
+        // biome-ignore lint/suspicious/noExplicitAny: restore original
+        (vscode.window as any).showErrorMessage = origFn;
+      }
+
+      assert.ok(
+        shown.length > 0,
+        "An error notification should be shown when a non-existent palantir version is requested",
+      );
+
+      // Restore a working palantir configuration (latest version on a supported platform).
+      await cfg().update("version", "latest", GLOBAL);
+      await Promise.resolve(
+        vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
+      ).catch(() => {});
+      // Clean up palantir settings for subsequent tests.
+      await cfg().update("style", undefined, GLOBAL);
       await cfg().update("mode", "native-binary", GLOBAL);
       await Promise.resolve(
         vscode.commands.executeCommand("googleJavaFormatForVSCode.reloadExecutable"),
