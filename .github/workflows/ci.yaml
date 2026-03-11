@@ -157,31 +157,22 @@ jobs:
           [ -n "$BIN" ] && echo "GJF_EXECUTABLE=$BIN" >> "$GITHUB_ENV" || true
 
       # --------------------------------------------------------------------------
-      # Pre-download the Palantir native binary for Scenario J (executable override)
-      # and export the discovered version for Scenario K (explicit version).
+      # Pre-download a Palantir native binary for Scenario J (executable override).
+      #
+      # Scenario K uses a hardcoded explicit version in the test, mirroring the
+      # fixed-version GJF scenarios, so CI only needs to provide a local binary
+      # path for the executable-override case.
       #
       # Palantir only publishes native binaries for Linux (glibc x86-64 and
       # aarch64) and macOS (aarch64).  The step is therefore only run on
-      # Linux CI runners (ubuntu-latest = linux-x64).  On Windows, both
-      # PALANTIR_EXECUTABLE and PALANTIR_VERSION remain unset and both
-      # palantir executable-override/explicit-version scenarios skip gracefully.
+      # Linux CI runners (ubuntu-latest = linux-x64).  On Windows,
+      # PALANTIR_EXECUTABLE remains unset and Scenario J skips gracefully.
       # --------------------------------------------------------------------------
-      - name: Download Palantir native binary (for executable + explicit-version scenarios)
+      - name: Download Palantir native binary (for executable scenario)
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          METADATA=$(curl -sf \
-            "https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/maven-metadata.xml" \
-            || true)
-          VERSION=$(echo "$METADATA" | grep -oP '(?<=<release>)[^<]+' || true)
-          if [ -z "$VERSION" ]; then
-            echo "Could not determine Palantir version from Maven Central, skipping"
-            exit 0
-          fi
-          # Export the version so Scenario K can configure 'version' explicitly.
-          echo "PALANTIR_VERSION=$VERSION" >> "$GITHUB_ENV"
-          # Download the native binary for Scenario J (executable override).
-          URL="https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/${VERSION}/palantir-java-format-native-${VERSION}-nativeImage-linux-glibc_x86-64.bin"
+          URL="https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/2.81.0/palantir-java-format-native-2.81.0-nativeImage-linux-glibc_x86-64.bin"
           mkdir -p "${RUNNER_TEMP}/palantir-native"
           OUT="${RUNNER_TEMP}/palantir-native/palantir-java-format"
           curl -sf -L -o "$OUT" "$URL" || true

@@ -10,6 +10,7 @@ const EXTENSION_ID = "josevseb.google-java-format-for-vs-code";
 const FIXTURES_DIR = path.resolve(__dirname, "..", "..", "test", "fixtures");
 const CONFIG = "java.format.settings.google";
 const GLOBAL = vscode.ConfigurationTarget.Global;
+const PALANTIR_EXPLICIT_VERSION = "2.81.0";
 
 /** Convenience accessor for the extension configuration section. */
 function cfg() {
@@ -134,17 +135,6 @@ interface FormatScenario {
   version?: string;
 
   /**
-   * Name of an environment variable whose value is the explicit formatter
-   * version to configure (approach 2).  When set, the test reads the version
-   * from the env var and sets `java.format.settings.google.version` to that
-   * value.  If the env var is absent the tests in this suite are skipped
-   * gracefully.  Use this to avoid hardcoding a specific palantir version
-   * in the test — CI exports `PALANTIR_VERSION` after downloading the binary.
-   * Mutually exclusive with `version`.
-   */
-  versionEnvVar?: string;
-
-  /**
    * Artifact type to configure (approach 2): `"jar-file"` or
    * `"native-binary"`.  When `"jar-file"`, the extension downloads and runs
    * the all-deps jar; Java 21+ must be on PATH.  When `"native-binary"`,
@@ -183,6 +173,13 @@ interface FormatScenario {
    * Use `"    private"` for AOSP (4-space) scenarios.
    */
   indentCheck?: string;
+
+  /**
+   * Substring that must appear in the formatted output of
+   * `UnformattedSample.java`, used to verify a style-specific lambda/method
+   * chain layout. Defaults to the google-java-format layout from the fixture.
+   */
+  formatCheck?: string;
 }
 
 function addFormatSuite(suiteName: string, scenario: FormatScenario) {
@@ -211,15 +208,8 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       } else {
         // Approach 2: version + mode auto-download
         await cfg().update("executable", undefined, GLOBAL); // must be clear
-
-        // Resolve the version: prefer versionEnvVar (CI-provided) over literal version.
-        const version = scenario.versionEnvVar
-          ? process.env[scenario.versionEnvVar]
-          : scenario.version;
-        if (scenario.versionEnvVar && !version) return; // tests will skip via isAvailable()
-
-        if (version !== undefined) {
-          await cfg().update("version", version, GLOBAL);
+        if (scenario.version !== undefined) {
+          await cfg().update("version", scenario.version, GLOBAL);
         }
         if (scenario.mode !== undefined) {
           await cfg().update("mode", scenario.mode, GLOBAL);
@@ -251,7 +241,6 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     /** True when the prerequisite for this scenario is met. */
     async function isAvailable(): Promise<boolean> {
       if (scenario.executableEnvVar && !process.env[scenario.executableEnvVar]) return false;
-      if (scenario.versionEnvVar && !process.env[scenario.versionEnvVar]) return false;
       if (scenario.requiresJava && !(await isJava21Available())) return false;
       if (scenario.style === "palantir" && !isPalantirPlatform()) return false;
       return true;
@@ -260,8 +249,6 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     let skipMsg: string | null = null;
     if (scenario.executableEnvVar) {
       skipMsg = `  ↳ Skipping: ${scenario.executableEnvVar} env var not set`;
-    } else if (scenario.versionEnvVar) {
-      skipMsg = `  ↳ Skipping: ${scenario.versionEnvVar} env var not set`;
     } else if (scenario.requiresJava) {
       skipMsg = "  ↳ Skipping: Java 21+ not available on PATH (GJF ≥ 1.22.0 requires Java 21)";
     } else if (scenario.style === "palantir") {
@@ -271,6 +258,9 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
     // Resolved per-scenario settings used in test assertions.
     const formattedFixture = scenario.formattedFixture ?? "FormattedSample.java";
     const indentCheck = scenario.indentCheck ?? "  private";
+    const formatCheck =
+      scenario.formatCheck ??
+      ["project", "        .getPluginManager()", "        .withPlugin("].join("\n");
 
     // -----------------------------------------------------------------------
     // Tests (identical for every scenario; what differs is how the executable
@@ -296,6 +286,10 @@ function addFormatSuite(suiteName: string, scenario: FormatScenario) {
       assert.ok(
         formattedText.includes(indentCheck),
         `Formatted code should contain "${indentCheck}" (expected indentation style)`,
+      );
+      assert.ok(
+        formattedText.includes(formatCheck),
+        `Formatted code should contain "${formatCheck}" (expected style-specific layout)`,
       );
 
       await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
@@ -617,12 +611,13 @@ suite("Google Java Format for VS Code – e2e", () => {
   // exercising the getUriFromString remote-URL (Uri.parse) code path.
   // Scenario I downloads palantir-java-format from Maven Central and is skipped
   // on platforms without a palantir native binary (Windows, macOS x86-64).
-  // Scenarios J and K are both guarded by CI env vars set by the CI step
-  // "Download Palantir native binary (for executable + explicit-version scenarios)".
+  // Scenario J is guarded by the PALANTIR_EXECUTABLE env var set by the CI step
+  // "Download Palantir native binary (for executable scenario)".
   // J uses PALANTIR_EXECUTABLE (pre-downloaded binary path) to exercise the
   // executable-override code path for palantir.
-  // K uses PALANTIR_VERSION (the version that CI downloaded) to exercise the
-  // getPalantirReleaseByVersion() code path (explicit version, not "latest").
+  // K uses a hardcoded explicit palantir version (matching the fixed-version
+  // google-java-format scenarios) to exercise the getPalantirReleaseByVersion()
+  // code path.
   // -------------------------------------------------------------------------
 
   addFormatSuite("Scenario A – executable: local file path", {
@@ -659,6 +654,7 @@ suite("Google Java Format for VS Code – e2e", () => {
     // for the "already-formatted" test and check for 4-space indent.
     formattedFixture: "AospFormattedSample.java",
     indentCheck: "    private",
+    formatCheck: ["project.getPluginManager()", "                .withPlugin("].join("\n"),
   });
 
   addFormatSuite("Scenario G – version:latest, mode:jar-file, extra:--aosp (AOSP style)", {
@@ -668,6 +664,7 @@ suite("Google Java Format for VS Code – e2e", () => {
     extra: "--aosp",
     formattedFixture: "AospFormattedSample.java",
     indentCheck: "    private",
+    formatCheck: ["project.getPluginManager()", "                .withPlugin("].join("\n"),
   });
 
   addFormatSuite("Scenario H – executable: file:// URI (getUriFromString Uri.parse path)", {
@@ -682,6 +679,7 @@ suite("Google Java Format for VS Code – e2e", () => {
       version: "latest",
       mode: "native-binary",
       formattedFixture: "PalantirFormattedSample.java",
+      formatCheck: 'project.getPluginManager().withPlugin("maven-publish", plugin -> {',
     },
   );
 
@@ -689,14 +687,19 @@ suite("Google Java Format for VS Code – e2e", () => {
     style: "palantir",
     executableEnvVar: "PALANTIR_EXECUTABLE",
     formattedFixture: "PalantirFormattedSample.java",
+    formatCheck: 'project.getPluginManager().withPlugin("maven-publish", plugin -> {',
   });
 
-  addFormatSuite("Scenario K – style:palantir, version:<explicit from CI>, mode:native-binary", {
-    style: "palantir",
-    versionEnvVar: "PALANTIR_VERSION",
-    mode: "native-binary",
-    formattedFixture: "PalantirFormattedSample.java",
-  });
+  addFormatSuite(
+    `Scenario K – style:palantir, version:${PALANTIR_EXPLICIT_VERSION}, mode:native-binary`,
+    {
+      style: "palantir",
+      version: PALANTIR_EXPLICIT_VERSION,
+      mode: "native-binary",
+      formattedFixture: "PalantirFormattedSample.java",
+      formatCheck: 'project.getPluginManager().withPlugin("maven-publish", plugin -> {',
+    },
+  );
 
   // -------------------------------------------------------------------------
   // Clear cache command
