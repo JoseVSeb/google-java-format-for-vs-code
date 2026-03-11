@@ -55,7 +55,7 @@
               "native-binary"
             ],
             "markdownEnumDescriptions": [
-              "Run the formatter as a JAR file using the local Java runtime. **Only available for `google` style.** Requires Java 21+ on PATH.",
+              "Run the formatter as a JAR file using the local Java runtime. **Only available for `google` style.** Requires a compatible Java runtime on PATH (Java 21+ for google-java-format ≥ 1.22.0; older versions work with their respective minimum supported Java version).",
               "Run the platform-specific native binary (no JVM required). Supported for both `google` and `palantir` styles. Falls back to `jar-file` when no native binary is available for the current platform (google style only)."
             ],
             "scope": "window"

@@ -10,6 +10,8 @@ const EXTENSION_ID = "josevseb.google-java-format-for-vs-code";
 const FIXTURES_DIR = path.resolve(__dirname, "..", "..", "test", "fixtures");
 const CONFIG = "java.format.settings.google";
 const GLOBAL = vscode.ConfigurationTarget.Global;
+// Intentionally separate from the CI-downloaded executable used by Scenario J:
+// this constant exercises the extension's explicit-version auto-download path.
 const PALANTIR_EXPLICIT_VERSION = "2.81.0";
 
 /** Convenience accessor for the extension configuration section. */

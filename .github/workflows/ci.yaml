@@ -172,6 +172,10 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
+          # Intentionally independent from Scenario K's hardcoded explicit-version
+          # test: Scenario J validates executable override with any working local
+          # Palantir binary, while Scenario K validates auto-download of a pinned
+          # formatter version inside the extension itself.
           URL="https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/2.81.0/palantir-java-format-native-2.81.0-nativeImage-linux-glibc_x86-64.bin"
           mkdir -p "${RUNNER_TEMP}/palantir-native"
           OUT="${RUNNER_TEMP}/palantir-native/palantir-java-format"
