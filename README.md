@@ -20,39 +20,15 @@ This extension is available on:
 
 ## Extension Settings
 
-There are two mutually-exclusive ways to configure which Google Java Format
-executable the extension uses:
+| Setting | Type | Default | Values | Description |
+|---------|------|---------|--------|-------------|
+| `java.format.settings.google.style` | `string` | `"google"` | `"google"`, `"palantir"` | Formatter variant to use. `"google"` supports both `native-binary` and `jar-file` modes. `"palantir"` (120-char lines) requires `native-binary` and is unavailable on Windows and macOS x86-64. |
+| `java.format.settings.google.version` | `string` | `"latest"` | `"latest"` or a release tag (e.g. `"1.25.2"`) | Version of the formatter to download. For `"palantir"` style, supply the Maven Central version (e.g. `"2.89.0"`). Ignored when `executable` is set. |
+| `java.format.settings.google.mode` | `string` | `"native-binary"` | `"native-binary"`, `"jar-file"` | Runtime artifact to use. `"native-binary"` runs a platform-specific binary (no JVM required). `"jar-file"` runs the JAR via the local Java runtime and is only supported for `"google"` style (requires Java 21+ for google-java-format ≥ 1.22.0). Ignored when `executable` is set. |
+| `java.format.settings.google.extra` | `string` | `null` | Any valid CLI flag(s) | Extra CLI arguments passed to the formatter (e.g. `"--aosp"` for Android Open Source Project style). |
+| `java.format.settings.google.executable` | `string` | `null` | URL or local file path | *(Override — not recommended.)* Path or URL to a custom formatter executable. When set, `style`, `version`, and `mode` are all ignored. |
 
-### Approach 1 – Automatic download (recommended)
-
-Use `version` and `mode` together.  The extension contacts the GitHub Releases
-API, resolves the correct download URL, caches the binary locally, and runs it
-automatically.
-
-* `java.format.settings.google.version`: The GJF release to use.  Accepts
-  `"latest"` (default) or a concrete version string like `"1.25.2"`.
-* `java.format.settings.google.mode`: Which artifact to download and run.
-  * `"native-binary"` (default) – downloads and runs the platform-specific
-    GraalVM native image.  No JVM is required at runtime; on platforms where a
-    native image is not available the extension falls back to the jar.
-  * `"jar-file"` – downloads and runs the all-deps JAR.  Requires Java 21+ on
-    PATH.
-
-### Approach 2 – Explicit executable path (advanced / not recommended)
-
-* `java.format.settings.google.executable`: An absolute file path **or** an
-  HTTP(S) URL pointing to a GJF executable (jar or native binary).  When set,
-  this **overrides** `version` and `mode`; the extension uses the provided
-  binary directly and skips the automatic download entirely.
-
-### Shared setting
-
-* `java.format.settings.google.extra`: Extra CLI arguments passed to GJF
-  (e.g. `"--aosp"`).  This setting applies regardless of which configuration
-  approach above is used.
-
-Please refer to the [Google Java Format repository](https://github.com/google/google-java-format)
-for available versions and CLI arguments.
+Refer to the [Google Java Format releases](https://github.com/google/google-java-format/releases) and the [Palantir Java Format releases](https://github.com/palantir/palantir-java-format/releases) for available versions and CLI options.
 
 ## Extension Commands
 
