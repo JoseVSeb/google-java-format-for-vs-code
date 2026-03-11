@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [1.3.0](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.2.3...v1.3.0) (2026-03-11)
+
+### Features
+
+* Add palantir-java-format support via `style` config option ([#71](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/71)) ([e698e59](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/e698e59d53603f3f8207f8a1a0114edd5d05a9c6)), closes [#62](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/62)
+
 ## [1.2.3](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.2.2...v1.2.3) (2026-03-10)
 
 ### Code Refactoring
