@@ -44,6 +44,10 @@ export class Executable {
   ) {
     const instance = new Executable(context, config, cache, service, log);
     instance.startLoad();
+    instance.loadPromise.catch((err: unknown) => {
+      const message = `Google Java Format: Failed to load executable. ${err instanceof Error ? err.message : String(err)}`;
+      void window.showErrorMessage(message);
+    });
     return instance;
   }
 

@@ -14,52 +14,43 @@ Format your java files using Google Java Format program which follows Google Jav
 ## Installation
 
 This extension is available on:
+
 - [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=josevseb.google-java-format-for-vs-code) for VS Code
 - [OpenVSX Registry](https://open-vsx.org/extension/josevseb/google-java-format-for-vs-code) for VSCodium, Cursor, and other VS Code compatible editors
 - [GitHub Releases](https://github.com/JoseVSeb/google-java-format-for-vs-code/releases) as `.vsix` files for manual installation
 
 ## Extension Settings
 
-There are two mutually-exclusive ways to configure which Google Java Format
-executable the extension uses:
+### Approach 1 – Automatic download *(recommended)*
 
-### Approach 1 – Automatic download (recommended)
+The extension resolves the download URL, caches the binary locally, and runs it automatically.
 
-Use `version` and `mode` together.  The extension contacts the GitHub Releases
-API, resolves the correct download URL, caches the binary locally, and runs it
-automatically.
+| Setting | Default | Available Options | Description |
+|---------|---------|--------|-------------|
+| `java.format.settings.google.style` | `"google"` | `"google"`, `"palantir"` | Formatter variant. `"google"` supports both `native-binary` and `jar-file` modes. `"palantir"` is a lambda-friendly variant that requires `native-binary` and is unavailable on Windows and macOS x86-64. |
+| `java.format.settings.google.version` | `"latest"` | `"latest"` or a release tag (e.g. `"1.25.2"`) | Version to download. For `"palantir"` style, supply the Maven Central version (e.g. `"2.89.0"`). |
+| `java.format.settings.google.mode` | `"native-binary"` | `"native-binary"`, `"jar-file"` | Runtime artifact to use. `"native-binary"` runs a platform-specific binary (no JVM required); for `"google"` style on unsupported platforms it automatically falls back to the `"jar-file"` JAR. `"jar-file"` runs the JAR via the local Java runtime and is only supported for `"google"` style (requires Java 21+ for google-java-format ≥ 1.22.0). |
 
-* `java.format.settings.google.version`: The GJF release to use.  Accepts
-  `"latest"` (default) or a concrete version string like `"1.25.2"`.
-* `java.format.settings.google.mode`: Which artifact to download and run.
-  * `"native-binary"` (default) – downloads and runs the platform-specific
-    GraalVM native image.  No JVM is required at runtime; on platforms where a
-    native image is not available the extension falls back to the jar.
-  * `"jar-file"` – downloads and runs the all-deps JAR.  Requires Java 21+ on
-    PATH.
+### Approach 2 – Custom executable *(override, not recommended)*
 
-### Approach 2 – Explicit executable path (advanced / not recommended)
+| Setting | Default | Available Options | Description |
+|---------|---------|--------|-------------|
+| `java.format.settings.google.executable` | `null` | URL or local file path | Path or URL to a custom formatter executable. When set, `style`, `version`, and `mode` are all ignored. |
 
-* `java.format.settings.google.executable`: An absolute file path **or** an
-  HTTP(S) URL pointing to a GJF executable (jar or native binary).  When set,
-  this **overrides** `version` and `mode`; the extension uses the provided
-  binary directly and skips the automatic download entirely.
+### Other Settings
 
-### Shared setting
+| Setting | Default | Available Options | Description |
+|---------|---------|--------|-------------|
+| `java.format.settings.google.extra` | `null` | Any valid CLI flag(s) | Extra CLI arguments passed to the formatter (e.g. `"--aosp"` for Android Open Source Project style). |
 
-* `java.format.settings.google.extra`: Extra CLI arguments passed to GJF
-  (e.g. `"--aosp"`).  This setting applies regardless of which configuration
-  approach above is used.
-
-Please refer to the [Google Java Format repository](https://github.com/google/google-java-format)
-for available versions and CLI arguments.
+Refer to the [Google Java Format releases](https://github.com/google/google-java-format/releases) and the Palantir Java Format artifact on [Maven Central](https://central.sonatype.com/artifact/com.palantir.javaformat/palantir-java-format) (for versions) or the [Palantir Java Format repository](https://github.com/palantir/palantir-java-format) (for CLI options) for available versions and CLI options.
 
 ## Extension Commands
 
-This extension contributes the following commands:
-
-* `Google Java Format For VS Code: Clear Cache`: Clear cache of [Google Java Format executable](https://github.com/google/google-java-format/releases) downloads by the extension.
-* `Google Java Format For VS Code: Reload Executable`: Reload the [Google Java Format executable](https://github.com/google/google-java-format/releases) using the current configuration.
+| Command | Description |
+|---------|-------------|
+| `Google Java Format For VS Code: Reload Executable` | Reload the configured formatter executable (Google or Palantir) using the current configuration. |
+| `Google Java Format For VS Code: Clear Cache` | Clear the local cache of formatter executable downloads (Google from [GitHub Releases](https://github.com/google/google-java-format/releases) and Palantir from [Maven Central](https://search.maven.org/search?q=g:com.palantir.javaformat)). |
 
 ## How to Debug
 
