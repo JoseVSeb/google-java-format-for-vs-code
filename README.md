@@ -14,6 +14,7 @@ Format your java files using Google Java Format program which follows Google Jav
 ## Installation
 
 This extension is available on:
+
 - [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=josevseb.google-java-format-for-vs-code) for VS Code
 - [OpenVSX Registry](https://open-vsx.org/extension/josevseb/google-java-format-for-vs-code) for VSCodium, Cursor, and other VS Code compatible editors
 - [GitHub Releases](https://github.com/JoseVSeb/google-java-format-for-vs-code/releases) as `.vsix` files for manual installation
@@ -24,7 +25,7 @@ This extension is available on:
 
 The extension resolves the download URL, caches the binary locally, and runs it automatically.
 
-| Setting | Default | Values | Description |
+| Setting | Default | Available Options | Description |
 |---------|---------|--------|-------------|
 | `java.format.settings.google.style` | `"google"` | `"google"`, `"palantir"` | Formatter variant. `"google"` supports both `native-binary` and `jar-file` modes. `"palantir"` is a lambda-friendly variant that requires `native-binary` and is unavailable on Windows and macOS x86-64. |
 | `java.format.settings.google.version` | `"latest"` | `"latest"` or a release tag (e.g. `"1.25.2"`) | Version to download. For `"palantir"` style, supply the Maven Central version (e.g. `"2.89.0"`). |
@@ -32,13 +33,13 @@ The extension resolves the download URL, caches the binary locally, and runs it 
 
 ### Approach 2 – Custom executable *(override, not recommended)*
 
-| Setting | Default | Values | Description |
+| Setting | Default | Available Options | Description |
 |---------|---------|--------|-------------|
 | `java.format.settings.google.executable` | `null` | URL or local file path | Path or URL to a custom formatter executable. When set, `style`, `version`, and `mode` are all ignored. |
 
-### Shared
+### Other Settings
 
-| Setting | Default | Values | Description |
+| Setting | Default | Available Options | Description |
 |---------|---------|--------|-------------|
 | `java.format.settings.google.extra` | `null` | Any valid CLI flag(s) | Extra CLI arguments passed to the formatter (e.g. `"--aosp"` for Android Open Source Project style). |
 
