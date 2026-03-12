@@ -6,95 +6,89 @@ import * as path from "node:path";
 import { buildHttpsAgent, fetchWithCerts } from "../../fetchWithCerts";
 
 // ---------------------------------------------------------------------------
-// fetchWithCerts — comprehensive SSL / proxy-awareness test suite
+// fetchWithCerts — full coverage test suite
 //
 // All tests run against a local HTTPS server whose certificate is signed by a
 // self-signed test CA that is intentionally absent from every system trust
 // store (neither `tls.rootCertificates` nor Electron's bundled CA bundle
-// includes it).  This lets each scenario stand in for a real-world failure
-// mode without making external network calls.
+// includes it).  No external network calls are made.
 //
-// The server exposes several endpoints:
+// Server endpoints:
 //
-//   GET /                   → 200 {"status":"ok"}       (basic health check)
-//   GET /releases/latest    → 200 GJF releases-API JSON (simulates api.github.com)
-//   GET /redirect           → 301 → /asset              (simulates CDN redirect)
-//   GET /asset              → 200 binary bytes           (simulates binary download)
+//   GET /                       → 200 {"status":"ok"}
+//   GET /text                   → 200 "hello world" (plain text)
+//   GET /invalid-json           → 200 "not_valid{{{" (malformed JSON body)
+//   GET /asset                  → 200 binary bytes (partial ELF-like header)
+//   GET /redirect-relative      → 301 Location: /asset  (relative redirect)
+//   GET /redirect-absolute      → 301 Location: https://127.0.0.1:{port}/asset
+//   GET /redirect-loop          → 301 Location: /redirect-loop  (infinite loop)
+//   GET /not-found              → 404 {"error":"not found"}
+//   GET /server-error           → 500 {"error":"server error"}
+//   GET /error-after-headers    → 200 headers + partial body, then socket destroyed
 //
-// Four scenario groups are covered:
+// Scenario groups:
 //
-//   Scenario 1 – Proxy / custom CA (SSL-inspection simulation)
-//     Models: corporate MITM proxy or macOS keychain missing the server CA.
-//     global fetch()          → throws (Electron's CA store doesn't include proxy CA)
-//     fetchWithCerts()        → throws (tls.rootCertificates doesn't include it either)
-//     fetchWithCerts([caPem]) → 200  ✓ (explicit proxy CA trust works)
-//
-//   Scenario 2 – GJF Releases API simulation (macOS Electron fetch failure)
-//     Models: global fetch() failing for api.github.com on macOS CI runners.
-//     global fetch()                  → throws (simulates macOS Electron failure)
-//     fetchWithCerts([caPem])         → 200 JSON parseable as release response  ✓
-//
-//   Scenario 3 – CDN asset download with redirect
-//     Models: GJF binary download via GitHub → objects.githubusercontent.com CDN.
-//     global fetch()          → throws (SSL fails before following redirect)
-//     fetchWithCerts([caPem]) → follows 301, returns binary body ✓
-//
-//   Scenario 4 – Bundled CA / explicit trust mechanism
-//     Models: bundling the GitHub root CA alongside tls.rootCertificates so
-//     that fetchWithCerts() succeeds even when the OS keychain is missing it.
-//     buildHttpsAgent()        → agent using only tls.rootCertificates → throws for self-signed
-//     buildHttpsAgent([caPem]) → agent trusting test CA → https.get() returns 200 ✓
+//   Scenario 1 – SSL/TLS validation (proxy / self-signed CA)
+//   Scenario 2 – Response body methods (.json(), .text(), .arrayBuffer())
+//   Scenario 3 – HTTP redirects (relative, absolute, too-many-redirects)
+//   Scenario 4 – Non-2xx HTTP status codes
+//   Scenario 5 – buildHttpsAgent() CA trust mechanism
+//   Scenario 6 – Mid-response stream error
 // ---------------------------------------------------------------------------
 
 const FIXTURES_DIR = path.resolve(__dirname, "..", "..", "test", "fixtures");
 
-// Minimal GJF releases-API JSON (matches the shape parsed by GoogleJavaFormatRelease.ts).
-const MOCK_RELEASE_JSON = JSON.stringify({
-  tag_name: "v1.25.2",
-  assets: [
-    {
-      browser_download_url:
-        "https://github.com/google/google-java-format/releases/download/v1.25.2/google-java-format-1.25.2-all-deps.jar",
-    },
-    {
-      browser_download_url:
-        "https://github.com/google/google-java-format/releases/download/v1.25.2/google-java-format_linux-x86-64",
-    },
-    {
-      browser_download_url:
-        "https://github.com/google/google-java-format/releases/download/v1.25.2/google-java-format_darwin-arm64",
-    },
-    {
-      browser_download_url:
-        "https://github.com/google/google-java-format/releases/download/v1.25.2/google-java-format_windows-x86-64.exe",
-    },
-  ],
-});
-
 // Minimal binary payload simulating a GJF native binary asset (partial ELF-like header).
 const MOCK_BINARY = Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01]);
 
+// Set by suiteSetup once the server has a port; used by requestHandler for
+// the absolute-URL redirect endpoint.
+let serverUrl = "";
+
 function requestHandler(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
-  if (url === "/releases/latest") {
+  if (url === "/text") {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("hello world");
+  } else if (url === "/invalid-json") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(MOCK_RELEASE_JSON);
-  } else if (url === "/redirect") {
-    // Simulate CDN redirect (GitHub release → objects.githubusercontent.com)
-    res.writeHead(301, { Location: "/asset" });
-    res.end();
+    res.end("not_valid{{{");
   } else if (url === "/asset") {
     res.writeHead(200, { "Content-Type": "application/octet-stream" });
     res.end(MOCK_BINARY);
+  } else if (url === "/redirect-relative") {
+    // Relative Location header — exercises the `new URL(location, url)` branch.
+    res.writeHead(301, { Location: "/asset" });
+    res.end();
+  } else if (url === "/redirect-absolute") {
+    // Absolute Location header — exercises the `/^https?:\/\//i.test(location)` branch.
+    res.writeHead(301, { Location: `${serverUrl}/asset` });
+    res.end();
+  } else if (url === "/redirect-loop") {
+    // Redirects to itself — will eventually exceed MAX_REDIRECTS (10).
+    res.writeHead(301, { Location: "/redirect-loop" });
+    res.end();
+  } else if (url === "/not-found") {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "not found" }));
+  } else if (url === "/server-error") {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "server error" }));
+  } else if (url === "/error-after-headers") {
+    // Send headers and partial body, then destroy the socket before the body
+    // is complete.  Exercises the `res.on("error", reject)` code path.
+    res.writeHead(200, { "Content-Length": "1024", "Content-Type": "application/json" });
+    res.write("partial");
+    setImmediate(() => res.socket?.destroy());
   } else {
+    // Default: GET / → 200 {"status":"ok"}
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ status: "ok" }));
   }
 }
 
-suite("fetchWithCerts – SSL / proxy-awareness", () => {
+suite("fetchWithCerts – full coverage", () => {
   let server: https.Server;
-  let serverUrl: string;
   let caPem: string;
 
   suiteSetup(function (this: Mocha.Context) {
@@ -124,19 +118,16 @@ suite("fetchWithCerts – SSL / proxy-awareness", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Scenario 1 – Proxy / custom CA (SSL-inspection simulation)
+  // Scenario 1 – SSL/TLS validation (proxy / self-signed CA)
   //
-  // Models a corporate SSL-inspecting proxy (or a macOS system keychain that
-  // is missing the server's root CA).  global fetch() and fetchWithCerts()
-  // both fail without the CA, but fetchWithCerts([caPem]) succeeds.
+  // Models a corporate SSL-inspecting proxy: the server's root CA is absent
+  // from every system/Electron trust store, so both global fetch() and
+  // fetchWithCerts() fail unless the CA is explicitly provided.
   // -------------------------------------------------------------------------
 
-  test("Scenario 1a: global fetch() fails for self-signed CA server (Electron SSL failure mode)", async function () {
+  test("Scenario 1a: global fetch() fails for self-signed CA server", async function () {
     this.timeout(10_000);
 
-    // Confirms the failure mode that affects Electron's built-in fetch() on
-    // some platforms: the CA is absent from Electron's (and the system's)
-    // trust store, causing the TLS handshake to fail.
     let threw = false;
     try {
       await fetch(serverUrl);
@@ -147,9 +138,12 @@ suite("fetchWithCerts – SSL / proxy-awareness", () => {
     assert.ok(threw, "global fetch() should throw for a server with an untrusted self-signed CA");
   });
 
-  test("Scenario 1b: fetchWithCerts() without extra CA also fails (SSL validation is active)", async function () {
+  test("Scenario 1b: fetchWithCerts() without extra CA fails — SSL validation is active", async function () {
     this.timeout(10_000);
 
+    // Exercises the SSL handshake failure path: the CA is missing from
+    // tls.rootCertificates, so https.get() emits an error on the request
+    // before a response is received (req.on("error") → reject).
     let threw = false;
     try {
       await fetchWithCerts(serverUrl);
@@ -170,113 +164,167 @@ suite("fetchWithCerts – SSL / proxy-awareness", () => {
 
     assert.ok(response.ok, `Expected HTTP 200 but got ${response.status}`);
     assert.strictEqual(response.status, 200);
+    // Also exercises .json() with a valid JSON body.
     const body = await response.json();
     assert.deepStrictEqual(body, { status: "ok" });
   });
 
   // -------------------------------------------------------------------------
-  // Scenario 2 – GJF Releases API simulation (macOS Electron fetch failure)
-  //
-  // Models: global fetch() hanging or failing on macOS CI runners when
-  // calling api.github.com (Electron's Chromium networking stack bypasses
-  // VS Code's https.request patching, leading to CA store mismatches).
-  // The local server exposes /releases/latest with the same JSON shape as
-  // the real GitHub Releases API used by GoogleJavaFormatService.
+  // Scenario 2 – Response body methods (.json(), .text(), .arrayBuffer())
   // -------------------------------------------------------------------------
 
-  test("Scenario 2a: global fetch() fails for GJF API URL shape (simulated macOS failure)", async function () {
+  test("Scenario 2a: .text() returns the plain-text response body as a string", async function () {
     this.timeout(10_000);
 
-    let threw = false;
-    try {
-      await fetch(`${serverUrl}/releases/latest`);
-    } catch {
-      threw = true;
-    }
+    const response = await fetchWithCerts(`${serverUrl}/text`, [caPem]);
 
-    assert.ok(
-      threw,
-      "global fetch() should fail for GJF API URL with untrusted CA (macOS failure mode)",
-    );
+    assert.ok(response.ok, `Expected HTTP 200 but got ${response.status}`);
+    const body = await response.text();
+    assert.strictEqual(body, "hello world");
   });
 
-  test("Scenario 2b: fetchWithCerts([caPem]) fetches GJF API URL and returns parseable release JSON", async function () {
+  test("Scenario 2b: .json() rejects when response body is not valid JSON", async function () {
     this.timeout(10_000);
 
-    const response = await fetchWithCerts(`${serverUrl}/releases/latest`, [caPem]);
+    const response = await fetchWithCerts(`${serverUrl}/invalid-json`, [caPem]);
 
     assert.ok(response.ok, `Expected HTTP 200 but got ${response.status}`);
 
-    const body = (await response.json()) as {
-      tag_name: string;
-      assets: { browser_download_url: string }[];
-    };
-    assert.ok(typeof body.tag_name === "string", "Response should have a tag_name field");
-    assert.ok(Array.isArray(body.assets), "Response should have an assets array");
-    assert.ok(body.assets.length > 0, "Assets array should not be empty");
-    assert.ok(
-      body.assets.every((a) => typeof a.browser_download_url === "string"),
-      "Each asset should have a browser_download_url",
+    let threw = false;
+    try {
+      await response.json();
+    } catch {
+      threw = true;
+    }
+
+    assert.ok(threw, ".json() should reject when the response body is not valid JSON");
+  });
+
+  test("Scenario 2c: .arrayBuffer() returns the binary response body", async function () {
+    this.timeout(10_000);
+
+    const response = await fetchWithCerts(`${serverUrl}/asset`, [caPem]);
+
+    assert.ok(response.ok, `Expected HTTP 200 but got ${response.status}`);
+    const buf = await response.arrayBuffer();
+    assert.strictEqual(
+      buf.byteLength,
+      MOCK_BINARY.byteLength,
+      "arrayBuffer() byte length should match the mock binary",
     );
   });
 
   // -------------------------------------------------------------------------
-  // Scenario 3 – CDN asset download with redirect
-  //
-  // Models: GJF binary downloads that go through GitHub → CDN redirect
-  // (e.g., objects.githubusercontent.com).  global fetch() fails on SSL
-  // before it can even follow the redirect.  fetchWithCerts() follows
-  // the 301 and returns the full binary body.
+  // Scenario 3 – HTTP redirects
   // -------------------------------------------------------------------------
 
-  test("Scenario 3a: global fetch() fails for redirect URL with untrusted CA (SSL fails before redirect)", async function () {
+  test("Scenario 3a: global fetch() fails for redirect URL when CA is untrusted (SSL before redirect)", async function () {
     this.timeout(10_000);
 
     let threw = false;
     try {
-      await fetch(`${serverUrl}/redirect`);
+      await fetch(`${serverUrl}/redirect-relative`);
     } catch {
       threw = true;
     }
 
     assert.ok(
       threw,
-      "global fetch() should fail for redirect URL when the server uses an untrusted CA",
+      "global fetch() should fail at the TLS layer before it can follow any redirect",
     );
   });
 
-  test("Scenario 3b: fetchWithCerts([caPem]) follows 301 redirect and returns binary asset", async function () {
+  test("Scenario 3b: fetchWithCerts([caPem]) follows a relative 301 redirect and returns the asset", async function () {
     this.timeout(10_000);
 
-    const response = await fetchWithCerts(`${serverUrl}/redirect`, [caPem]);
+    // Exercises the `new URL(location, url).href` branch (relative Location header).
+    const response = await fetchWithCerts(`${serverUrl}/redirect-relative`, [caPem]);
 
     assert.ok(response.ok, `Expected HTTP 200 after redirect but got ${response.status}`);
     assert.strictEqual(response.status, 200);
-
     const buffer = await response.arrayBuffer();
-    assert.ok(buffer.byteLength > 0, "Downloaded binary asset should not be empty");
-    // Verify the redirect was followed and we received the mock binary (partial ELF-like header).
     assert.strictEqual(
       buffer.byteLength,
       MOCK_BINARY.byteLength,
-      "Binary content length should match the mock asset",
+      "Binary content after redirect should match the mock asset",
+    );
+  });
+
+  test("Scenario 3c: fetchWithCerts([caPem]) follows an absolute-URL 301 redirect and returns the asset", async function () {
+    this.timeout(10_000);
+
+    // Exercises the absolute URL detection branch: when the Location header
+    // starts with "https://", `fetchInternal` uses it directly instead of
+    // resolving it relative to the current URL.
+    const response = await fetchWithCerts(`${serverUrl}/redirect-absolute`, [caPem]);
+
+    assert.ok(response.ok, `Expected HTTP 200 after absolute redirect but got ${response.status}`);
+    assert.strictEqual(response.status, 200);
+    const buffer = await response.arrayBuffer();
+    assert.strictEqual(
+      buffer.byteLength,
+      MOCK_BINARY.byteLength,
+      "Binary content after absolute redirect should match the mock asset",
+    );
+  });
+
+  test("Scenario 3d: fetchWithCerts() rejects with 'Too many redirects' after MAX_REDIRECTS", async function () {
+    this.timeout(10_000);
+
+    // The server's /redirect-loop endpoint redirects to itself indefinitely.
+    // fetchInternal() aborts after MAX_REDIRECTS (10) hops.
+    let error: unknown;
+    try {
+      await fetchWithCerts(`${serverUrl}/redirect-loop`, [caPem]);
+    } catch (e) {
+      error = e;
+    }
+
+    assert.ok(error instanceof Error, "Should reject with an Error for too many redirects");
+    assert.ok(
+      (error as Error).message.includes("Too many redirects"),
+      `Error message should mention "Too many redirects", got: ${(error as Error).message}`,
     );
   });
 
   // -------------------------------------------------------------------------
-  // Scenario 4 – Bundled CA / explicit trust mechanism
+  // Scenario 4 – Non-2xx HTTP status codes
   //
-  // Models: bundling the GitHub root CA alongside tls.rootCertificates so
-  // fetchWithCerts() can reach GitHub on systems where the OS keychain or
-  // Electron's CA store is missing that root.  Uses buildHttpsAgent() directly
-  // to prove the underlying trust mechanism.
+  // fetchWithCerts() resolves (does not throw) for 4xx/5xx responses; callers
+  // must check response.ok or response.status.
   // -------------------------------------------------------------------------
 
-  test("Scenario 4a: buildHttpsAgent() without extra CA cannot connect to self-signed server", async function () {
+  test("Scenario 4a: HTTP 404 response resolves with ok=false and status=404", async function () {
     this.timeout(10_000);
 
-    // tls.rootCertificates does not include our test CA, so the connection
-    // must fail — proving that buildHttpsAgent() does not disable validation.
+    const response = await fetchWithCerts(`${serverUrl}/not-found`, [caPem]);
+
+    assert.strictEqual(response.ok, false, "ok should be false for HTTP 404");
+    assert.strictEqual(response.status, 404);
+  });
+
+  test("Scenario 4b: HTTP 500 response resolves with ok=false and status=500", async function () {
+    this.timeout(10_000);
+
+    const response = await fetchWithCerts(`${serverUrl}/server-error`, [caPem]);
+
+    assert.strictEqual(response.ok, false, "ok should be false for HTTP 500");
+    assert.strictEqual(response.status, 500);
+  });
+
+  // -------------------------------------------------------------------------
+  // Scenario 5 – buildHttpsAgent() CA trust mechanism
+  //
+  // Models bundling a specific root CA (e.g. DigiCert / GitHub's CA) alongside
+  // tls.rootCertificates so that fetchWithCerts() can reach endpoints whose CA
+  // is absent from the OS keychain or Electron's bundled store.
+  // -------------------------------------------------------------------------
+
+  test("Scenario 5a: buildHttpsAgent() without extra CA rejects for self-signed server", async function () {
+    this.timeout(10_000);
+
+    // tls.rootCertificates does not include our test CA — proves that
+    // buildHttpsAgent() does NOT disable certificate validation.
     const agent = buildHttpsAgent();
 
     let threw = false;
@@ -296,11 +344,9 @@ suite("fetchWithCerts – SSL / proxy-awareness", () => {
     assert.ok(threw, "buildHttpsAgent() without extra CA should fail for self-signed server");
   });
 
-  test("Scenario 4b: buildHttpsAgent([caPem]) with bundled CA succeeds (simulates bundled GitHub CA)", async function () {
+  test("Scenario 5b: buildHttpsAgent([caPem]) with bundled CA connects successfully", async function () {
     this.timeout(10_000);
 
-    // Simulates bundling the GitHub root CA so that fetchWithCerts() can reach
-    // GitHub endpoints on macOS where the keychain CA store is incomplete.
     const agent = buildHttpsAgent([caPem]);
 
     await new Promise<void>((resolve, reject) => {
@@ -314,16 +360,24 @@ suite("fetchWithCerts – SSL / proxy-awareness", () => {
     });
   });
 
-  test("Scenario 4c: fetchWithCerts([caPem]) returns correct Content-Type for binary asset", async function () {
+  // -------------------------------------------------------------------------
+  // Scenario 6 – Mid-response stream error
+  //
+  // The server sends HTTP 200 headers then destroys the socket before the body
+  // is complete.  This exercises the `res.on("error", reject)` code path in
+  // fetchInternal(): the promise should reject rather than hang.
+  // -------------------------------------------------------------------------
+
+  test("Scenario 6a: mid-response socket destruction propagates as a rejection", async function () {
     this.timeout(10_000);
 
-    // Verifies the full chain: explicit CA trust → redirect following → correct
-    // binary response.  This mirrors the production code path in Cache.ts that
-    // calls fetchWithCerts() and then reads arrayBuffer().
-    const response = await fetchWithCerts(`${serverUrl}/asset`, [caPem]);
+    let threw = false;
+    try {
+      await fetchWithCerts(`${serverUrl}/error-after-headers`, [caPem]);
+    } catch {
+      threw = true;
+    }
 
-    assert.ok(response.ok, `Expected HTTP 200 but got ${response.status}`);
-    const buf = await response.arrayBuffer();
-    assert.ok(buf.byteLength > 0, "Binary response should have non-empty body");
+    assert.ok(threw, "A mid-response socket error should cause fetchWithCerts() to reject");
   });
 });
