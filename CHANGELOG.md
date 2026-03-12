@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [1.3.1](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.3.0...v1.3.1) (2026-03-12)
+
+### Bug Fixes
+
+* show startup error notification ([#72](https://github.com/JoseVSeb/google-java-format-for-vs-code/issues/72)) ([07afa42](https://github.com/JoseVSeb/google-java-format-for-vs-code/commit/07afa42a32b880801071e639b97590273f53b4fd))
+
 ## [1.3.0](https://github.com/JoseVSeb/google-java-format-for-vs-code/compare/v1.2.3...v1.3.0) (2026-03-11)
 
 ### Features
