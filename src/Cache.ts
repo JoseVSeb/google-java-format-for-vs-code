@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { ExtensionContext, LogOutputChannel } from "vscode";
 import { commands, Uri, window, workspace } from "vscode";
-import { fetchWithCerts } from "./fetchWithCerts";
 import { logAsyncMethod, logMethod } from "./logDecorator";
 
 export class Cache {
@@ -77,7 +76,7 @@ export class Cache {
       }
 
       this.log.info(`Downloading file from ${url}`);
-      const response = await fetchWithCerts(url);
+      const response = await fetch(url);
       if (response.ok) {
         const buffer = await response.arrayBuffer();
         await workspace.fs.writeFile(localPath, new Uint8Array(buffer));

@@ -4,7 +4,6 @@ import type {
   GoogleJavaFormatConfiguration,
   GoogleJavaFormatVersion,
 } from "./ExtensionConfiguration";
-import { fetchWithCerts } from "./fetchWithCerts";
 import type { GoogleJavaFormatReleaseResponse } from "./GoogleJavaFormatRelease";
 import { parseGoogleJavaFormatReleaseResponse } from "./GoogleJavaFormatRelease";
 import { logAsyncMethod, logMethod } from "./logDecorator";
@@ -27,7 +26,7 @@ export class GoogleJavaFormatService {
   async getLatestRelease() {
     const url = "https://api.github.com/repos/google/google-java-format/releases/latest";
     this.log.debug("Fetching:", url);
-    const response = await fetchWithCerts(url);
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error("Failed to get latest release of Google Java Format.");
     }
@@ -43,7 +42,7 @@ export class GoogleJavaFormatService {
   async getReleaseByVersion(version: Exclude<GoogleJavaFormatVersion, "latest">) {
     const url = `https://api.github.com/repos/google/google-java-format/releases/tags/v${version}`;
     this.log.debug("Fetching:", url);
-    const response = await fetchWithCerts(url);
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to get v${version} of Google Java Format.`);
     }
@@ -179,7 +178,7 @@ export class GoogleJavaFormatService {
     const url =
       "https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/maven-metadata.xml";
     this.log.debug("Fetching:", url);
-    const response = await fetchWithCerts(url);
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error("Failed to get latest release of Palantir Java Format.");
     }
