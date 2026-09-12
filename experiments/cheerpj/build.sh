@@ -80,31 +80,47 @@ step "Compiling the Java 17 switch bootstrap shim"
 "$JDK17_HOME/bin/javac" -nowarn --release 17 -d "$classes/runtime" \
   $(find runtime/src -name '*.java')
 
-step "Assembling the bundle"
+step "Assembling the bundle (pass 1: relocate, retarget, rewrite)"
 rm -rf "$resources"
 mkdir -p "$resources/gjfweb"
 echo "$GJF_VERSION" > "$resources/gjfweb/gjf-version.txt"
 bundle="$dist/gjf-cheerpj.jar"
-"$JDK21_HOME/bin/java" -cp "$asm_cp:$classes/tools" gjfcheerpj.build.BundleBuilder \
+staged="$build/stage1.jar"
+jdk_build=$("$JDK21_HOME/bin/java" -XshowSettings:properties -version 2>&1 |
+  sed -n 's/^ *java.runtime.version = //p')
+bundler() {
+  "$JDK21_HOME/bin/java" -cp "$asm_cp:$classes/tools" gjfcheerpj.build.BundleBuilder \
+    --prefix "gjfweb/shaded/" \
+    --target 61 \
+    --main-class gjfweb.api.BrowserFormatter \
+    --manifest "Bundle-Gjf-Version=$GJF_VERSION" \
+    --manifest "Bundle-Compiler-Jdk=$jdk_build" \
+    "$@"
+}
+bundler \
   --jar "$gjf_jar" \
   --dir "$jdkmods/jdk.compiler" \
   --dir "$jdkmods/java.compiler" \
   --dir "$jdkmods/jdk.internal.opt" \
   --dir "$classes/runtime" \
   --dir "$resources" \
-  --out "$bundle" \
-  --prefix "gjfweb/shaded/" \
-  --target 61 \
-  --main-class gjfweb.api.BrowserFormatter
+  --out "$staged"
 
 step "Compiling the JavaScript-facing API against the bundle"
-"$JDK17_HOME/bin/javac" -nowarn --release 17 -cp "$bundle" -d "$classes/api" \
+"$JDK17_HOME/bin/javac" -nowarn --release 17 -cp "$staged" -d "$classes/api" \
   $(find api/src -name '*.java')
-(cd "$classes/api" && "$JDK17_HOME/bin/jar" uf "$OLDPWD/$bundle" .)
+
+step "Assembling the bundle (pass 2: fold in the API)"
+# The transformations are idempotent, so re-running them over the staged jar only
+# folds in the API classes. Appending with "jar uf" instead would stamp those
+# entries with the current time and make the build unreproducible.
+bundler --jar "$staged" --dir "$classes/api" --out "$bundle"
 
 step "Generating browser self-test fixtures"
-python3 - "$bundle" "$JDK17_HOME" web/selftest.json \
-  testdata/ModernSyntax.java ../../src/test/fixtures/UnformattedSample.java <<'SELFTEST'
+selftest_inputs=(testdata/*.java)
+[ -f ../../src/test/fixtures/UnformattedSample.java ] &&
+  selftest_inputs+=(../../src/test/fixtures/UnformattedSample.java)
+python3 - "$bundle" "$JDK17_HOME" web/selftest.json "${selftest_inputs[@]}" <<'SELFTEST'
 import json, pathlib, subprocess, sys
 
 bundle, jdk17, out = sys.argv[1], sys.argv[2], sys.argv[3]

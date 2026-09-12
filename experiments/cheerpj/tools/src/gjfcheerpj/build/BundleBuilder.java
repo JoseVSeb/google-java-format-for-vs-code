@@ -118,6 +118,7 @@ public final class BundleBuilder {
         String prefix = "gjfweb/shaded/";
         int target = Opcodes.V17;
         String mainClass = null;
+        Map<String, String> provenance = new LinkedHashMap<>();
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -127,6 +128,10 @@ public final class BundleBuilder {
                 case "--prefix" -> prefix = args[++i];
                 case "--target" -> target = Integer.parseInt(args[++i]);
                 case "--main-class" -> mainClass = args[++i];
+                case "--manifest" -> {
+                    String[] pair = args[++i].split("=", 2);
+                    provenance.put(pair[0], pair.length > 1 ? pair[1] : "");
+                }
                 default -> throw new IllegalArgumentException("unknown option: " + args[i]);
             }
         }
@@ -141,7 +146,7 @@ public final class BundleBuilder {
         for (Path dir : dirs) {
             builder.addDirectory(dir);
         }
-        builder.write(out, mainClass);
+        builder.write(out, mainClass, provenance);
         builder.report(out);
     }
 
@@ -336,25 +341,46 @@ public final class BundleBuilder {
         return result;
     }
 
-    private void write(Path out, String mainClass) throws IOException {
+    /**
+     * Writes the bundle deterministically: entries are sorted, every timestamp is zeroed, and the
+     * manifest is written as an ordinary entry rather than by {@link JarOutputStream}, which would
+     * stamp it with the current time. Two builds from the same inputs produce the same bytes, so a
+     * pipeline can compare releases by hash.
+     */
+    private void write(Path out, String mainClass, Map<String, String> provenance) throws IOException {
         Files.createDirectories(out.toAbsolutePath().getParent());
         Manifest manifest = new Manifest();
         Attributes attributes = manifest.getMainAttributes();
         attributes.put(Attributes.Name.MANIFEST_VERSION, "1.0");
-        attributes.putValue("Created-By", "google-java-format CheerpJ experiment");
+        attributes.putValue("Created-By", "google-java-format CheerpJ bundler");
         if (mainClass != null) {
             attributes.put(Attributes.Name.MAIN_CLASS, mainClass);
         }
-        try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(out), manifest)) {
+        attributes.putValue("Bundle-Relocation-Prefix", prefix.replace('/', '.'));
+        attributes.putValue("Bundle-Target-Class-Version", Integer.toString(targetVersion));
+        provenance.forEach(attributes::putValue);
+
+        try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(out))) {
             jar.setLevel(Deflater.BEST_COMPRESSION);
+            writeEntry(jar, "META-INF/MANIFEST.MF", manifestBytes(manifest));
             for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
-                JarEntry jarEntry = new JarEntry(entry.getKey());
-                jarEntry.setTime(0L);
-                jar.putNextEntry(jarEntry);
-                jar.write(entry.getValue());
-                jar.closeEntry();
+                writeEntry(jar, entry.getKey(), entry.getValue());
             }
         }
+    }
+
+    private static byte[] manifestBytes(Manifest manifest) throws IOException {
+        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+        manifest.write(buffer);
+        return buffer.toByteArray();
+    }
+
+    private static void writeEntry(JarOutputStream jar, String name, byte[] content) throws IOException {
+        JarEntry entry = new JarEntry(name);
+        entry.setTime(0L);
+        jar.putNextEntry(entry);
+        jar.write(content);
+        jar.closeEntry();
     }
 
     private void report(Path out) throws IOException {

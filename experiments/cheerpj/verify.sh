@@ -98,7 +98,8 @@ for path in "${sources[@]}"; do
   unzip -qo "$jar" '*.java' -d "$corpus/$(basename "$path" .jar)"
 done
 find "$corpus" -name '*.java' | sort | awk "NR % ${CORPUS_STRIDE:-1} == 0" | head -n "$CORPUS_SIZE" > "$build/corpus.txt"
-find ../../src/test/fixtures testdata -name '*.java' >> "$build/corpus.txt"
+find testdata -name '*.java' >> "$build/corpus.txt"
+[ -d ../../src/test/fixtures ] && find ../../src/test/fixtures -name '*.java' >> "$build/corpus.txt"
 echo "$(wc -l < "$build/corpus.txt") files"
 
 step "Compiling the corpus runner against both jars"

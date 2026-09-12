@@ -1,0 +1,85 @@
+# Template for running this directory as a release-triggered pipeline.
+#
+# Not active here: it lives under experiments/cheerpj/ci/ rather than .github/workflows/
+# so it does nothing until someone moves it, either into this repository or into a
+# standalone one. Its only inputs are a google-java-format release and two JDKs, so the
+# directory can be lifted out whole.
+name: Build google-java-format browser bundle
+
+on:
+  schedule:
+    - cron: "17 6 * * *" # poll Maven Central for a new release
+  workflow_dispatch:
+    inputs:
+      gjf_version:
+        description: google-java-format version to bundle (blank = latest release)
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: experiments/cheerpj
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pin both JDKs: the bundled compiler comes from the Java 21 image, so its
+      # vendor and version are part of the artifact, not an incidental detail of
+      # the runner. They are recorded in the bundle manifest as Bundle-Compiler-Jdk.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - name: Resolve JDK homes
+        run: |
+          echo "JDK17_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "JDK21_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+
+      - name: Resolve the release to bundle
+        id: resolve
+        run: |
+          version="${{ inputs.gjf_version }}"
+          if [ -z "$version" ]; then
+            version=$(curl -fsSL \
+              https://repo1.maven.org/maven2/com/google/googlejavaformat/google-java-format/maven-metadata.xml |
+              sed -n 's:.*<release>\(.*\)</release>.*:\1:p' | tail -1)
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Nothing to do when the tag for this release already exists.
+      - name: Skip releases already published
+        id: published
+        run: |
+          tag="gjf-${{ steps.resolve.outputs.version }}-cheerpj"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        if: steps.published.outputs.skip != 'true'
+        env:
+          GJF_VERSION: ${{ steps.resolve.outputs.version }}
+        run: ./build.sh
+
+      # The gate. The API scan is what catches a new google-java-format release
+      # reaching for a Java API the target runtime does not have; the corpus
+      # comparison is what catches a transformation changing formatting output.
+      - name: Verify
+        if: steps.published.outputs.skip != 'true'
+        run: ./verify.sh
+
+      - name: Publish
+        if: steps.published.outputs.skip != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: gjf-${{ steps.resolve.outputs.version }}-cheerpj
+          name: google-java-format ${{ steps.resolve.outputs.version }} for CheerpJ
+          files: experiments/cheerpj/dist/gjf-cheerpj.jar
+          fail_on_unmatched_files: true
