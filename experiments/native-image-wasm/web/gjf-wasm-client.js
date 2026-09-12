@@ -29,7 +29,11 @@ export function createFormatter(config = {}) {
 
   const ready = send({
     type: "init",
-    options: { imageUrl: config.imageUrl ?? "../dist/gjf-wasm.js" },
+    options: {
+      imageUrl: config.imageUrl ?? "../dist/gjf-wasm.js",
+      // Off compiles the module inside every call, which is what the wrapper does alone.
+      cacheModule: config.cacheModule !== false,
+    },
   });
 
   return {

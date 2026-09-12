@@ -1,32 +1,42 @@
 // Runs the WebAssembly image inside a Web Worker.
 //
-// Web Image's JavaScript wrapper is written to be loaded as a script that immediately runs
-// the Java main with the host's command line arguments, and it keeps its GraalVM object
-// inside its own closure. There is no module export to import, and --shared does not add
-// one in 25.0.4. So the wrapper is fetched as text and its last line, the bootstrap call, is
-// replaced with one that publishes an awaitable entry point instead. Everything else about
-// the file is untouched.
+// Web Image's JavaScript wrapper is written to be loaded as a script that immediately runs the
+// Java main with the host's command line arguments, and it keeps its GraalVM object inside its
+// own closure. There is no module export to import, and --shared does not add one in 25.0.4. So
+// the wrapper is fetched as text, its bootstrap line is replaced with one that publishes the
+// pieces needed to drive it, and the result is loaded from a blob URL.
 //
-// Standard output arrives through console.log, so it is captured for the duration of a run.
-// Each call boots a fresh VM: the wrapper instantiates the module per run, and nothing in it
-// offers a way to re-enter main.
+// What is and is not reusable, both measured (see ../README.md):
+//
+//   * The compiled module IS reusable. The wrapper otherwise calls WebAssembly.instantiate on
+//     raw bytes every run, which recompiles all 14.6 MB. Compiling once at startup and
+//     instantiating per call roughly halves the per-call cost.
+//   * The booted isolate is NOT reusable. Calling main a second time on a live instance fails
+//     with "Fatal error: overwriting existing java.lang.Thread": the image's entry point
+//     initialises thread state it will not initialise twice. Keeping a warm VM needs an
+//     exported re-entrant function, which is what @JS.Export is for once Web Image surfaces a
+//     usable export mechanism.
+//
+// Standard output arrives through console.log, captured by reference when the wrapper loads, so
+// a forwarder is installed before it is loaded and the sink swapped per run.
 
 const BOOTSTRAP = "GraalVM.run(load_cmd_args(),config).catch(console.error);";
-// The wrapper defaults its module path to its own script URL plus ".wasm". Evaluating it
-// here would make that the worker's URL, so the path is set explicitly instead.
-const REPLACEMENT =
-  "globalThis.__runImage = (args) => {" +
-  "  const c = new GraalVM.Config();" +
-  "  c.wasm_path = globalThis.__wasmPath;" +
-  "  return GraalVM.run(args, c);" +
-  "};";
+const CONFIG_ANCHOR = "GraalVM.Config = Config;";
+// Exposes the wrapper's own internals so a cached module can be instantiated per call, instead
+// of letting it fetch and recompile the bytes every time.
+const INTERNALS =
+  CONFIG_ANCHOR +
+  " GraalVM.__internals = {" +
+  "  get runtime() { return runtime; }," +
+  "  get imports() { return wasmImports; }," +
+  "  Data, createVM" +
+  " };";
 
-let runImage = null;
+let wrapper = null;
+let compiled = null;
 let wasmUrl = null;
+let cacheModule = true;
 
-// The wrapper captures console.log by reference when it loads (var stdoutWriter =
-// new ConsoleWriter(console.log)), so a later override would never be seen. A stable
-// forwarder is installed before evaluating it, and each run swaps the sink behind it.
 let sink = null;
 const realLog = console.log.bind(console);
 const realError = console.error.bind(console);
@@ -45,8 +55,7 @@ self.onmessage = async (event) => {
 async function handle(type, source, options) {
   switch (type) {
     case "init":
-      await load(options.imageUrl);
-      return { ready: true };
+      return await load(options.imageUrl, options);
     case "format":
       return await format(source, options ?? {});
     default:
@@ -54,41 +63,70 @@ async function handle(type, source, options) {
   }
 }
 
-async function load(imageUrl) {
-  if (runImage) {
-    return;
+async function load(imageUrl, options = {}) {
+  cacheModule = options.cacheModule !== false;
+  if (wrapper) {
+    return { ready: true };
   }
   wasmUrl = new URL(imageUrl, self.location.href);
   const response = await fetch(wasmUrl);
   if (!response.ok) {
     throw new Error(`could not fetch ${wasmUrl}: ${response.status}`);
   }
-  const wrapper = await response.text();
-  if (!wrapper.includes(BOOTSTRAP)) {
+  const text = await response.text();
+  if (!text.includes(BOOTSTRAP) || !text.includes(CONFIG_ANCHOR)) {
     throw new Error(
-      "the Web Image wrapper does not end with the expected bootstrap line; " +
-        "a newer GraalVM may expose a real module export, in which case use that instead",
+      "the Web Image wrapper does not have the expected shape; a newer GraalVM may expose a " +
+        "real module export, in which case use that instead of patching",
     );
   }
-  globalThis.__wasmPath = wasmUrl.href + ".wasm";
-  // Loaded through a blob URL rather than eval: a content security policy that forbids
-  // 'unsafe-eval' still allows importScripts of a blob when blob: is in the worker's
-  // script sources, and VS Code's extension host is exactly that kind of environment.
-  const blob = new Blob([wrapper.replace(BOOTSTRAP, REPLACEMENT)], { type: "text/javascript" });
+
+  const patched = text
+    .replace(CONFIG_ANCHOR, INTERNALS)
+    .replace(BOOTSTRAP, "globalThis.__graalVM = GraalVM;");
+  // A blob URL rather than eval: a content security policy that forbids 'unsafe-eval' still
+  // allows importScripts of a blob when blob: is among the worker's script sources.
+  const blob = new Blob([patched], { type: "text/javascript" });
   const blobUrl = URL.createObjectURL(blob);
   try {
     importScripts(blobUrl);
   } finally {
     URL.revokeObjectURL(blobUrl);
   }
-  runImage = globalThis.__runImage;
-  if (typeof runImage !== "function") {
+
+  wrapper = globalThis.__graalVM;
+  if (!wrapper || typeof wrapper.run !== "function") {
     throw new Error("patching the wrapper did not produce an entry point");
   }
+
+  if (!cacheModule) {
+    return { ready: true, compiled: false };
+  }
+  // Compile once. This is the expensive half of a call and the half that can be shared.
+  const bytes = await (await fetch(wasmUrl.href + ".wasm")).arrayBuffer();
+  compiled = await WebAssembly.compile(bytes);
+  return { ready: true, compiled: true };
+}
+
+async function runImage(args) {
+  const internals = wrapper.__internals;
+  if (!internals || !compiled) {
+    // Fall back to the wrapper's own path, which refetches and recompiles per call.
+    const config = new wrapper.Config();
+    config.wasm_path = wasmUrl.href + ".wasm";
+    await wrapper.run(args, config);
+    return;
+  }
+  const config = new wrapper.Config();
+  config.wasm_path = wasmUrl.href + ".wasm";
+  const instance = await WebAssembly.instantiate(compiled, internals.imports);
+  const data = new internals.Data(config);
+  data.wasm = { instance, memory: instance.exports.memory };
+  internals.createVM(args, data);
 }
 
 async function format(source, options) {
-  if (!runImage) {
+  if (!wrapper) {
     throw new Error("worker used before init");
   }
   const args = [];
@@ -119,7 +157,6 @@ async function format(source, options) {
   if (collected.err.length > 0) {
     throw new Error(collected.err.join("\n"));
   }
-  const chunks = collected.out;
   // ConsoleWriter emits one console.log per line and drops the trailing newline.
-  return chunks.join("\n") + "\n";
+  return collected.out.join("\n") + "\n";
 }

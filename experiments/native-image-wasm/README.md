@@ -15,7 +15,7 @@ plus the sample fixtures. Reproduce with `./build.sh` then `./verify.sh`.
 | Native image, same corpus, as a control | 25 of 25 files |
 | WebAssembly module | 14.6 MB, 6.2 MB gzipped, plus a 94 KB JS wrapper |
 | Native binary, for comparison | 33 MB |
-| Format call in the browser | 240 to 460 ms per file, including a fresh VM boot each time |
+| Format call in the browser | 240 ms for a 1.2 KB file, 409 ms at 10.9 KB, 1180 ms at 133 KB, each including a fresh VM boot |
 | Build time | 1 min 3 s for the wasm image, 1 min 47 s for the native one |
 | Toolchain | Oracle GraalVM 25.0.4 with Binaryen 123 |
 
@@ -70,10 +70,39 @@ matter and are easy to miss:
 - Standard output goes through `console.log`, captured *by reference* when the wrapper loads. A
   forwarder has to be installed before evaluation; swapping `console.log` afterwards is ignored.
 
-Each call boots a fresh VM, because nothing in the wrapper offers a way to re-enter `main`. That
-is most of the 240 to 460 ms. A persistent API is the obvious next step and is what `@JS.Export`
-in `org.graalvm.webimage.api` is for; it needs an export mechanism the wrapper actually surfaces,
-so it is worth retrying on a newer GraalVM before building anything on the patch above.
+### What can and cannot be kept loaded
+
+Both halves of "keep it warm" were tested rather than assumed.
+
+**The compiled module can be kept.** Left alone, the wrapper calls `WebAssembly.instantiate` on
+raw bytes every run, which recompiles all 14.6 MB. Compiling once at startup and instantiating
+from the cached `WebAssembly.Module` per call is a straight win at every size, measured A/B in one
+browser session, medians of six warm calls:
+
+| Input | Module cached | Wrapper's own path |
+|---|---|---|
+| startup | 394 ms | 42 ms |
+| 1.2 KB | 240 ms | 736 ms |
+| 10.9 KB | 409 ms | 546 ms |
+| 133 KB | 1180 ms | 1503 ms |
+
+It moves compilation into a one-time cost at startup. The worker does this by default;
+`cacheModule: false` restores the wrapper's behaviour for comparison.
+
+**The booted isolate cannot be kept.** Calling `main` a second time on a live instance fails
+immediately:
+
+```
+Fatal error: overwriting existing java.lang.Thread
+```
+
+The image's entry point initialises thread state it will not initialise twice, so every call has
+to instantiate a fresh isolate and replay static initialisation. That is what the remaining
+200 ms or so on a small file buys. Nothing about WebAssembly or workers forces this: the module
+stays loaded fine. What is missing is a re-entrant exported function instead of `main`, which is
+what `@JS.Export` in `org.graalvm.webimage.api` is for. It needs an export mechanism the wrapper
+actually surfaces, so it is worth retrying on a newer GraalVM rather than building further on the
+patch above.
 
 ## Usage
 

@@ -17,13 +17,16 @@ strings. Warm means a process that has already formatted the same file several t
 
 | Input | Official jar, JVM 21, warm | CheerpJ bundle, JVM 17, warm | WebAssembly in a browser | Native binary, cold process | Official jar CLI, cold process |
 |---|---|---|---|---|---|
-| 1.2 KB | 27 ms | 25 ms | 222 to 412 ms | 14 ms | 409 ms |
-| 10.9 KB | 36 ms | 44 ms | 327 to 519 ms | 26 ms | 594 ms |
-| 133 KB | 206 ms | 347 ms | 866 to 1009 ms | 281 ms | 1352 ms |
+| 1.2 KB | 27 ms | 25 ms | 240 ms | 14 ms | 409 ms |
+| 10.9 KB | 36 ms | 44 ms | 409 ms | 26 ms | 594 ms |
+| 133 KB | 206 ms | 347 ms | 1180 ms | 281 ms | 1352 ms |
 
-The WebAssembly numbers carry a fresh VM boot in every call, because Web Image's wrapper offers no
-way to re-enter the image. Most of the flat 200 ms is that. The first call after page load is
-about 1.4 s, since it also fetches and instantiates the module.
+The WebAssembly numbers are medians of six warm calls with the compiled module cached, and each
+one still carries a fresh VM boot. Caching the module is worth having: without it the same calls
+take 736, 546 and 1503 ms, because the wrapper recompiles all 14.6 MB every time. Reusing the
+booted isolate instead is not possible, and the reason is not WebAssembly or the worker: calling
+`main` twice on a live instance dies with "overwriting existing java.lang.Thread". The flat
+200 ms floor on a small file is that per-call boot.
 
 The compatibility layer costs the CheerpJ bundle nothing on small files and about 70 percent on the
 largest one, measured on a desktop JVM. The likely cause is the switch shim: pattern-matching
@@ -54,7 +57,7 @@ a large type switch over javac tree nodes.
 | Getting an API anyway | not needed | fetch the wrapper, replace its bootstrap line, load it from a blob URL |
 | Content security policy | must allow a script from the CDN | self-hosted, but needs `blob:` in the worker's script sources and `wasm-unsafe-eval` |
 | Standard output | not used, calls return values | captured by reference at load, so a forwarder must be installed before the wrapper loads |
-| Persistent VM | yes | no, one boot per call |
+| Persistent VM | yes | module stays compiled, but the isolate cannot be re-entered, so one boot per call |
 | Cancellation | a call cannot be interrupted | same |
 | Input size | strings, no limit | no limit in a browser; 128 KB per argument under Node or a shell, because the source goes through argv |
 | Threads | Java threads supported | none; measured that the format path creates none |
