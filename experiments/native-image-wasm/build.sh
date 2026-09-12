@@ -41,7 +41,21 @@ MSG
 fi
 
 case "$TARGET" in
-  native|wasm) ;;
+  native) ;;
+  wasm)
+    # The Wasm backend assembles its output with Binaryen's wasm-as.
+    if ! command -v wasm-as > /dev/null && [ -z "${WASM_AS_PATH:-}" ]; then
+      cat >&2 <<'MSG'
+error: wasm-as (Binaryen) not on PATH.
+
+The Web Image backend assembles the module with it. Install Binaryen and put its bin
+directory on PATH, or set WASM_AS_PATH to the executable:
+
+  https://github.com/WebAssembly/binaryen/releases   (apt's binaryen 108 is too old)
+MSG
+      exit 1
+    fi
+    ;;
   *) echo "error: TARGET must be native or wasm, got $TARGET" >&2; exit 1 ;;
 esac
 
@@ -82,6 +96,16 @@ args=(
 
 if [ "$TARGET" = "wasm" ]; then
   args+=(--tool:svm-wasm)
+  # Found by building: the Wasm backend scans the image heap more strictly than the native
+  # one, so the two javac resource bundles must be initialised at build time. Trees must be
+  # too, for a different reason: it builds a VarHandle in its static initialiser, and leaving
+  # that to run time drags in the whole VarHandle family, which the backend cannot compile
+  # (it fails on a float compare-and-set). Initialising it at build time resolves the handle
+  # during the build instead.
+  args+=(--initialize-at-build-time=com.sun.tools.javac.resources.compiler)
+  args+=(--initialize-at-build-time=com.sun.tools.javac.resources.javac)
+  args+=(--initialize-at-build-time=com.google.googlejavaformat.java.Trees)
+  [ -z "${WASM_AS_PATH:-}" ] || args+=("-H:WasmAsPath=$WASM_AS_PATH")
   output="$dist/gjf-wasm"
 else
   args+=(-march=compatibility)
@@ -91,10 +115,35 @@ fi
 step "Building the $TARGET image with $("${GRAALVM_HOME}/bin/native-image" --version | head -1)"
 "$native_image" "${args[@]}" -cp "$jar:$build/classes" gjfwasm.Main -o "$output"
 
+# The text form of the module is a build artifact of a few hundred megabytes. It is useful
+# when debugging the backend and useless otherwise.
+[ -n "${KEEP_WAT:-}" ] || rm -f "$output.js.wat"
+
+step "Generating browser self-test fixtures from the official jar"
+# The reference is the official release running on a normal JVM, so the browser comparison
+# is against what google-java-format actually produces, not against our own output.
+mkdir -p web
+python3 - "$jar" "${JDK_HOME:-$GRAALVM_HOME}" web/selftest.json sample/*.java <<'SELFTEST'
+import json, pathlib, subprocess, sys
+
+jar, jdk, out = sys.argv[1], sys.argv[2], sys.argv[3]
+cases = []
+for path in sys.argv[4:]:
+    expected = subprocess.run([f"{jdk}/bin/java", "-jar", jar, path],
+                              capture_output=True, text=True, check=True).stdout
+    cases.append({"name": pathlib.Path(path).name,
+                  "input": pathlib.Path(path).read_text(),
+                  "expected": expected})
+pathlib.Path(out).write_text(json.dumps({"cases": cases}, indent=2) + "\n")
+print(f"{len(cases)} case(s) -> {out}")
+SELFTEST
+
 step "Done"
 ls -la "$dist"
+echo
+echo "Smoke test:"
 if [ "$TARGET" = "native" ]; then
-  echo
-  echo "Smoke test:"
   "$output" sample/Sample.java | head -5
+else
+  node "$output.js" --code "$(cat sample/Sample.java)" | head -5
 fi

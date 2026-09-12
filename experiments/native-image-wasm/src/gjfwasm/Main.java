@@ -53,6 +53,9 @@ public final class Main {
                     startLine = Integer.parseInt(range[0]);
                     endLine = Integer.parseInt(range[range.length - 1]);
                 }
+                // The Wasm runtime has no standard input and no host filesystem, so the source
+                // is passed inline. Reading a file still works natively and under Node's shim.
+                case "--code" -> source = args[++i];
                 case "-", "--stdin" -> source = new String(System.in.readAllBytes(), StandardCharsets.UTF_8);
                 default -> source = new String(Files.readAllBytes(Paths.get(args[i])), StandardCharsets.UTF_8);
             }

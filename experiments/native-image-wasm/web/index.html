@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>google-java-format as WebAssembly</title>
+    <style>
+      body { margin: 0 auto; padding: 24px 16px; max-width: 1100px; font: 14px/1.5 system-ui, sans-serif; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      .sub { color: #5a6270; margin: 0 0 18px; }
+      .status { margin: 12px 0; color: #5a6270; }
+      .status.ok { color: #0f7a3d; } .status.error { color: #b3261e; }
+      main { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+      textarea { width: 100%; height: 55vh; font: 12px/1.5 ui-monospace, monospace; padding: 8px; }
+      button, select { font: inherit; padding: 4px 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>google-java-format as WebAssembly</h1>
+    <p class="sub">The official release, compiled ahead of time by GraalVM Native Image. No JVM, no CheerpJ, nothing fetched from a third party.</p>
+    <div>
+      <select id="style"><option value="GOOGLE">Google</option><option value="AOSP">AOSP</option></select>
+      <button id="format" disabled>Format</button>
+      <button id="selftest" disabled>Run self-test</button>
+    </div>
+    <p id="status" class="status">Loading the WebAssembly image…</p>
+    <main>
+      <section><h2>Input</h2><textarea id="input" spellcheck="false"></textarea></section>
+      <section><h2>Output</h2><textarea id="output" spellcheck="false" readonly></textarea></section>
+    </main>
+    <pre id="log"></pre>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

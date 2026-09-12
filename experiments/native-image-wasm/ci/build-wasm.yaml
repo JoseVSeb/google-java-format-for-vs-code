@@ -31,6 +31,13 @@ jobs:
           distribution: graalvm
           java-version: "25"
 
+      - name: Install Binaryen
+        run: |
+          curl -fsSL -o binaryen.tar.gz \
+            https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-linux.tar.gz
+          mkdir -p "$HOME/binaryen" && tar xzf binaryen.tar.gz -C "$HOME/binaryen" --strip-components=1
+          echo "$HOME/binaryen/bin" >> "$GITHUB_PATH"
+
       - name: Measure the runtime shape
         run: JDK_HOME="$JAVA_HOME" ./probe.sh
 
@@ -40,11 +47,16 @@ jobs:
         run: TARGET=native GRAALVM_HOME="$JAVA_HOME" ./build.sh
 
       - name: Build the WebAssembly image
-        id: wasm
-        continue-on-error: true
         env:
           GJF_VERSION: ${{ inputs.gjf_version }}
         run: TARGET=wasm GRAALVM_HOME="$JAVA_HOME" ./build.sh
+
+      - name: Install a browser
+        run: npm i -D playwright && npx playwright install --with-deps chromium
+
+      # Runs the image in a browser and diffs it against the official jar over a corpus.
+      - name: Verify against the official release
+        run: JDK_HOME="$JAVA_HOME" ./verify.sh
 
       # Whatever happens, keep the output: the first question about this approach is how
       # large the module is, and the second is what the backend rejected.
@@ -59,6 +71,4 @@ jobs:
 
       - name: Report
         if: always()
-        run: |
-          echo "wasm build outcome: ${{ steps.wasm.outcome }}"
-          ls -la dist/ || true
+        run: ls -la dist/ || true
