@@ -1,0 +1,64 @@
+# Template for building both images on a runner that has GraalVM.
+#
+# Not active: it lives under experiments/native-image-wasm/ci/ and does nothing until moved
+# into .github/workflows/. The native target runs first on purpose. It is the same
+# configuration google-java-format uses for its own published binaries, so if it fails the
+# problem is the setup, and only if it passes is a failure in the wasm target evidence about
+# the experimental backend.
+name: Build google-java-format AOT images
+
+on:
+  workflow_dispatch:
+    inputs:
+      gjf_version:
+        description: google-java-format version to compile (blank = latest release)
+        required: false
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: experiments/native-image-wasm
+    steps:
+      - uses: actions/checkout@v4
+
+      # Web Image ships in Oracle GraalVM, distribution: graalvm, from JDK 25.1 onward.
+      # Community Edition may not carry the backend; if this job fails at --tool:svm-wasm
+      # with an unknown option, that is the first thing to check.
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm
+          java-version: "25"
+
+      - name: Measure the runtime shape
+        run: JDK_HOME="$JAVA_HOME" ./probe.sh
+
+      - name: Build the native image
+        env:
+          GJF_VERSION: ${{ inputs.gjf_version }}
+        run: TARGET=native GRAALVM_HOME="$JAVA_HOME" ./build.sh
+
+      - name: Build the WebAssembly image
+        id: wasm
+        continue-on-error: true
+        env:
+          GJF_VERSION: ${{ inputs.gjf_version }}
+        run: TARGET=wasm GRAALVM_HOME="$JAVA_HOME" ./build.sh
+
+      # Whatever happens, keep the output: the first question about this approach is how
+      # large the module is, and the second is what the backend rejected.
+      - name: Upload images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gjf-aot-images
+          path: |
+            experiments/native-image-wasm/dist/
+          if-no-files-found: warn
+
+      - name: Report
+        if: always()
+        run: |
+          echo "wasm build outcome: ${{ steps.wasm.outcome }}"
+          ls -la dist/ || true
