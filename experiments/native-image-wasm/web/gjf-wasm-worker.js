@@ -71,7 +71,16 @@ async function load(imageUrl) {
     );
   }
   globalThis.__wasmPath = wasmUrl.href + ".wasm";
-  (0, eval)(wrapper.replace(BOOTSTRAP, REPLACEMENT));
+  // Loaded through a blob URL rather than eval: a content security policy that forbids
+  // 'unsafe-eval' still allows importScripts of a blob when blob: is in the worker's
+  // script sources, and VS Code's extension host is exactly that kind of environment.
+  const blob = new Blob([wrapper.replace(BOOTSTRAP, REPLACEMENT)], { type: "text/javascript" });
+  const blobUrl = URL.createObjectURL(blob);
+  try {
+    importScripts(blobUrl);
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
   runImage = globalThis.__runImage;
   if (typeof runImage !== "function") {
     throw new Error("patching the wrapper did not produce an entry point");
