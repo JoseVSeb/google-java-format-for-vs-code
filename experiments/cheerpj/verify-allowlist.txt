@@ -1,0 +1,8 @@
+# References the API scanner is allowed to report as absent on the target release.
+#
+# javac builds annotation proxies on top of java.base internals that no JVM exports to
+# the classpath. Only annotation processing reaches this code; parsing and formatting,
+# which is all google-java-format asks the compiler for, never does.
+class gjfweb.shaded.com.sun.tools.javac.model.AnnotationProxyMaker$MirroredTypeExceptionProxy
+class gjfweb.shaded.com.sun.tools.javac.model.AnnotationProxyMaker$MirroredTypesExceptionProxy
+class gjfweb.shaded.com.sun.tools.javac.model.AnnotationProxyMaker$ValueVisitor$1AnnotationTypeMismatchExceptionProxy

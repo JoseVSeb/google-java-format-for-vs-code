@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>google-java-format in the browser (CheerpJ)</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>google-java-format in the browser</h1>
+      <p class="subtitle">
+        The official release, running on CheerpJ's WebAssembly JVM. No server, no local Java.
+      </p>
+    </header>
+
+    <section class="controls">
+      <label>
+        Java runtime
+        <select id="javaVersion">
+          <option value="17" selected>17</option>
+          <option value="11">11</option>
+          <option value="8">8</option>
+        </select>
+      </label>
+      <label>
+        Style
+        <select id="style">
+          <option value="GOOGLE" selected>Google</option>
+          <option value="AOSP">AOSP</option>
+        </select>
+      </label>
+      <label class="checkbox"><input type="checkbox" id="fixImports" checked /> Fix imports</label>
+      <label class="checkbox"><input type="checkbox" id="formatJavadoc" /> Format javadoc</label>
+      <label class="checkbox"><input type="checkbox" id="reorderModifiers" checked /> Reorder modifiers</label>
+      <button id="format" disabled>Format</button>
+      <button id="selftest" disabled>Run self-test</button>
+    </section>
+
+    <p id="status" class="status">Starting CheerpJ…</p>
+
+    <main>
+      <section>
+        <h2>Input</h2>
+        <textarea id="input" spellcheck="false"></textarea>
+      </section>
+      <section>
+        <h2>Output</h2>
+        <textarea id="output" spellcheck="false" readonly></textarea>
+      </section>
+    </main>
+
+    <pre id="log" class="log"></pre>
+
+    <script src="https://cjrtnc.leaningtech.com/4.3/loader.js"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
