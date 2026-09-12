@@ -131,6 +131,31 @@ else
   fail "output differs, see $build/diff.txt"
 fi
 
+step "Comparing the browser entry point against the official command line driver"
+# The corpus run above compares the two jars through the same library calls. This
+# compares gjfweb.api.BrowserFormatter against what the extension ships today: the
+# official jar's own CLI, whole-file and line-range.
+rm -rf "$build/cli-ref" "$build/cli-bundle"
+mkdir -p "$build/cli-ref" "$build/cli-bundle"
+cli_mismatches=0
+cli_checked=0
+while read -r file; do
+  for flags in "" "--aosp" "--lines 1:12"; do
+    name="$(basename "$file").$(echo "$flags" | tr -d ' :-')"
+    "$JDK21_HOME/bin/java" -jar "$gjf_jar" $flags "$file" > "$build/cli-ref/$name" 2>/dev/null || true
+    "$JDK17_HOME/bin/java" -cp "$bundle" gjfweb.api.BrowserFormatter $flags "$file" \
+      > "$build/cli-bundle/$name" 2>/dev/null || true
+    cli_checked=$((cli_checked + 1))
+    cmp -s "$build/cli-ref/$name" "$build/cli-bundle/$name" || {
+      cli_mismatches=$((cli_mismatches + 1))
+      echo "  differs: $name"
+      diff "$build/cli-ref/$name" "$build/cli-bundle/$name" | head -6
+    }
+  done
+done < <(head -n "${CLI_PARITY_FILES:-15}" "$build/corpus.txt")
+[ "$cli_mismatches" -eq 0 ] || fail "$cli_mismatches of $cli_checked CLI comparisons differ"
+pass "$cli_checked invocations match the official CLI byte for byte"
+
 errors=$(grep -rl "^RUNTIME-ERROR" "$build/out-bundle" || true)
 if [ -n "$errors" ]; then
   echo

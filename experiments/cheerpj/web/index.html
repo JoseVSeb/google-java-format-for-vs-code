@@ -16,6 +16,13 @@
 
     <section class="controls">
       <label>
+        Backend
+        <select id="backend">
+          <option value="worker" selected>Web Worker</option>
+          <option value="main">Main thread</option>
+        </select>
+      </label>
+      <label>
         Java runtime
         <select id="javaVersion">
           <option value="17" selected>17</option>
@@ -31,8 +38,9 @@
         </select>
       </label>
       <label class="checkbox"><input type="checkbox" id="fixImports" checked /> Fix imports</label>
-      <label class="checkbox"><input type="checkbox" id="formatJavadoc" /> Format javadoc</label>
+      <label class="checkbox"><input type="checkbox" id="formatJavadoc" checked /> Format javadoc</label>
       <label class="checkbox"><input type="checkbox" id="reorderModifiers" checked /> Reorder modifiers</label>
+      <label class="checkbox"><input type="checkbox" id="reflowLongStrings" checked /> Reflow long strings</label>
       <button id="format" disabled>Format</button>
       <button id="selftest" disabled>Run self-test</button>
     </section>
@@ -52,7 +60,6 @@
 
     <pre id="log" class="log"></pre>
 
-    <script src="https://cjrtnc.leaningtech.com/4.3/loader.js"></script>
     <script type="module" src="app.js"></script>
   </body>
 </html>

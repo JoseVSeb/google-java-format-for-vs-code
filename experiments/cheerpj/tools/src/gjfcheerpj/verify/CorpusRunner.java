@@ -5,6 +5,7 @@ import com.google.googlejavaformat.java.FormatterException;
 import com.google.googlejavaformat.java.ImportOrderer;
 import com.google.googlejavaformat.java.JavaFormatterOptions;
 import com.google.googlejavaformat.java.RemoveUnusedImports;
+import com.google.googlejavaformat.java.StringWrapper;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -34,9 +35,12 @@ public final class CorpusRunner {
             String source = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
             Path out = outDir.resolve(path.getFileName() + "." + Integer.toHexString(input.hashCode()));
             try {
-                String result = RemoveUnusedImports.removeUnusedImports(source);
+                // google-java-format's own driver order: format, fix imports, reflow strings.
+                Formatter formatter = new Formatter();
+                String result = formatter.formatSource(source);
+                result = RemoveUnusedImports.removeUnusedImports(result);
                 result = ImportOrderer.reorderImports(result, JavaFormatterOptions.Style.GOOGLE);
-                result = new Formatter().formatSource(result);
+                result = StringWrapper.wrap(result, formatter);
                 Files.write(out, result.getBytes(StandardCharsets.UTF_8));
                 ok++;
             } catch (FormatterException e) {

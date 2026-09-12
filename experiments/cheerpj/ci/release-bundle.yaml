@@ -75,6 +75,22 @@ jobs:
         if: steps.published.outputs.skip != 'true'
         run: ./verify.sh
 
+      - name: Install a browser
+        if: steps.published.outputs.skip != 'true'
+        run: npm i -D playwright && npx playwright install --with-deps chromium
+
+      # Offline checks of the worker protocol, using a stand-in for CheerpJ's loader.
+      - name: Test the worker protocol
+        if: steps.published.outputs.skip != 'true'
+        run: ./test.sh
+
+      # The real thing: boot CheerpJ, format the fixtures in the browser and compare
+      # against output a desktop JVM produced from this same jar. Needs network access
+      # to Leaning Technologies' CDN.
+      - name: Run the bundle under CheerpJ
+        if: steps.published.outputs.skip != 'true'
+        run: ./test-cheerpj.sh
+
       - name: Publish
         if: steps.published.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
